@@ -31,8 +31,8 @@ from litestar.cli._utils import LitestarEnv, console, show_app_info
     show_default=True,
     default=1,
 )
-@option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
-@option("--http", help="HTTP Version to use (HTTP or HTTP2)", default=HTTPModes.auto.value, show_default=True)
+@option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers)
+@option("--http", help="HTTP Version to use (HTTP or HTTP2)", default=HTTPModes.auto, show_default=True)
 @option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True)
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True)
 @option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True)
@@ -48,7 +48,7 @@ def run_command(
     reload_dir: tuple[str, ...],
     pdb: bool,
     ctx: Context,
-) -> None:
+) -> None:  # sourcery skip: low-code-quality
     """Run a Litestar app.
 
     The app can be either passed as a module path in the form of <module name>.<submodule>:<app instance or factory>,
