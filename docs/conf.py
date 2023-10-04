@@ -35,7 +35,6 @@ extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "asyncpg": ("https://magicstack.github.io/asyncpg/current/", None),
     "litestar": ("https://docs.litestar.dev/latest/", None),
 }
 PY_CLASS = "py:class"

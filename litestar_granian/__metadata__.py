@@ -5,7 +5,7 @@ import importlib.metadata
 
 __all__ = ["__version__", "__project__"]
 
-__version__ = importlib.metadata.version("asyncpg_litestar")
+__version__ = importlib.metadata.version("litestar_granian")
 """Version of the project."""
-__project__ = importlib.metadata.metadata("asyncpg_litestar")["Name"]
+__project__ = importlib.metadata.metadata("litestar_granian")["Name"]
 """Name of the project."""

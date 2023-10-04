@@ -83,7 +83,7 @@ test:  												## Run the tests
 	@echo "=> Running test cases"
 	@$(ENV_PREFIX)pytest tests
 	@echo "=> Tests complete"
- 
+
 
 .PHONY: check-all
 check-all: lint test coverage 						## Run all linting, tests, and coverage checks

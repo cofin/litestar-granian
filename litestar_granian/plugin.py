@@ -9,11 +9,10 @@ from litestar_granian.cli import run_command
 if TYPE_CHECKING:
     from click import Group
 
- 
 
-
-class GranianPlugin(InitPluginProtocol, CLIPluginProtocol ):
+class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
     """Granian server plugin."""
+
     __slots__ = ()
 
     def on_cli_init(self, cli: Group) -> None:

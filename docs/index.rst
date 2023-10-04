@@ -1,17 +1,9 @@
 ================
-Litestar Asyncpg
+Litestar Granian
 ================
 
-Litestar Asyncpg is a plugin to make managing and creating database sessions easier for Litestar applications.
+Litestar Granian is a plugin to run a Litestar application with the Granian ASGI server.
 
-If you are using SQLAlchemy, you most likely want to use the SQLAlchemy Plugin.  However, if you are not using an ORM or need a simple tool to manage `asyncpg` connections, this plugin is for you.
-
-.. seealso:: It is built on:
-
-    * `SQLAlchemy <https://www.sqlalchemy.org/>`_
-    * `msgspec <https://jcristharif.com/msgspec/>`_
-    * `Alembic <https://alembic.sqlalchemy.org/en/latest/>`_
-    * `Typing Extensions <https://typing-extensions.readthedocs.io/en/latest/>`_
 
 Installation
 ------------
