@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import click
@@ -12,6 +13,8 @@ from litestar.cli._utils import LitestarEnv, console, show_app_info
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from litestar import Litestar
 
 
 @command(name="run")
@@ -63,6 +66,7 @@ if TYPE_CHECKING:
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True)
 @option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True)
 def run_command(
+    app: Litestar,
     reload: bool,
     port: int,
     wc: int,
@@ -87,10 +91,16 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-
-    if debug:
+    if app.logging_config is not None:
+        app.logging_config.configure()
+    log_dictconfig = (
+        {k: v for k, v in asdict(app.logging_config).items() if v is not None}  # type: ignore[call-overload]
+        if app.logging_config is not None
+        else None
+    )
+    if debug is not None:
+        app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
-
     if pdb:
         os.environ["LITESTAR_PDB"] = "1"
 
@@ -111,7 +121,7 @@ def run_command(
     reload = env.reload or reload
     workers = env.web_concurrency or wc
 
-    console.rule("[yellow]Starting [blue]granian[/] server process[/]", align="left")
+    console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
 
     show_app_info(app)
     Granian(
@@ -125,6 +135,7 @@ def run_command(
         threading_mode=threading_mode,
         loop=Loops.uvloop,
         loop_opt=not no_opt,
+        log_dictconfig=log_dictconfig,
         http=http,
         websockets=True,
         backlog=backlog,
