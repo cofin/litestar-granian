@@ -91,13 +91,6 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-    if app.logging_config is not None:
-        app.logging_config.configure()
-    log_dictconfig = (
-        {k: v for k, v in asdict(app.logging_config).items() if v is not None}  # type: ignore[call-overload]
-        if app.logging_config is not None
-        else None
-    )
     if debug is not None:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
@@ -113,23 +106,60 @@ def run_command(
             ctx.obj.app.pdb_on_exception = True
 
     env: LitestarEnv = ctx.obj
-    app = env.app
 
     threading_mode = threading_mode or ThreadModes.workers
     host = env.host or host
     port = env.port if env.port is not None else port
     reload = env.reload or reload
     workers = env.web_concurrency or wc
+    _run(
+        env=env,
+        reload=reload,
+        port=port,
+        wc=workers,
+        threads=threads,
+        http=http,
+        no_opt=no_opt,
+        backlog=backlog,
+        threading_mode=threading_mode,
+        ssl_keyfile=ssl_keyfile,
+        ssl_certificate=ssl_certificate,
+        url_path_prefix=url_path_prefix,
+        host=host,
+    )
 
+
+def _run(
+    env: LitestarEnv,
+    reload: bool,
+    port: int,
+    wc: int,
+    threads: int,
+    http: HTTPModes,
+    no_opt: bool,
+    backlog: int,
+    threading_mode: ThreadModes,
+    ssl_keyfile: Path | None,
+    ssl_certificate: Path | None,
+    url_path_prefix: str | None,
+    host: str,
+) -> None:
+    if env.app.logging_config is not None:
+        env.app.logging_config.configure()
+    log_dictconfig = (
+        {k: v for k, v in asdict(env.app.logging_config).items() if v is not None}  # type: ignore[call-overload]
+        if env.app.logging_config is not None
+        else None
+    )
     console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
 
-    show_app_info(app)
+    show_app_info(env.app)
     Granian(
         env.app_path,
         address=host,
         port=port,
         interface=Interfaces.ASGI,
-        workers=workers,
+        workers=wc,
         threads=threads,
         pthreads=threads,
         threading_mode=threading_mode,
