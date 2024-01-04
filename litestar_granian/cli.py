@@ -96,9 +96,7 @@ def run_command(
     import os
 
     from granian.constants import ThreadModes
-    from litestar.cli._utils import (
-        create_ssl_files,
-    )
+    from litestar.cli._utils import create_ssl_files
 
     if debug is not None:
         app.debug = True
@@ -168,8 +166,9 @@ def _run(
     from granian.server import Granian
     from litestar.cli._utils import console, show_app_info
     from litestar.cli.commands.core import _server_lifespan
+    from litestar.logging.config import LoggingConfig
 
-    if env.app.logging_config is not None:
+    if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
         if env.app.logging_config.loggers.get("_granian", None) is None:  # type: ignore[attr-defined]
             env.app.logging_config.loggers.update(  # type: ignore[attr-defined]
                 {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
