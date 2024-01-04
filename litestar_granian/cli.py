@@ -169,8 +169,8 @@ def _run(
     from litestar.logging.config import LoggingConfig
 
     if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
-        if env.app.logging_config.loggers.get("_granian", None) is None:  # type: ignore[attr-defined]
-            env.app.logging_config.loggers.update(  # type: ignore[attr-defined]
+        if env.app.logging_config.loggers.get("_granian", None) is None:
+            env.app.logging_config.loggers.update(
                 {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
             )
         env.app.logging_config.configure()
