@@ -2,7 +2,7 @@ default_language_version:
   python: "3.11"
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.0.0
+    rev: v3.1.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -17,7 +17,7 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.1.11"
+    rev: "v0.1.14"
     hooks:
       - id: ruff
         args: ["--fix"]
