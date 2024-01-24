@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar[cli]>=2.0.1",
-  "granian>=0.6.0",
+  "granian>=1.0.0",
 ]
 description = "Granian plugin for Litestar"
 keywords = [
@@ -33,7 +33,7 @@ license = {text = "MIT"}
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.5"
+version = "0.2.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
