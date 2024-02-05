@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 )
 @option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
 @option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
-@option("--no-opt", help="Disable event loop optimizations", is_flag=True, default=False)
+@option("--opt", help="Enable additional event loop optimizations", is_flag=True, default=False)
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog.",
@@ -185,7 +185,7 @@ def run_command(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     http: HTTPModes,
-    no_opt: bool,
+    opt: bool,
     backlog: int,
     threading_mode: ThreadModes,
     ssl_keyfile: Path | None,
@@ -249,14 +249,14 @@ def run_command(
 
     show_app_info(env.app)
     with _server_lifespan(env.app):
-        _run_granian(
+        _run_granian_in_subprocess(
             env=env,
             reload=reload,
             port=port,
             wc=workers,
             threads=threads,
             http=http,
-            no_opt=no_opt,
+            opt=opt,
             backlog=backlog,
             blocking_threads=blocking_threads,
             respawn_failed_workers=respawn_failed_workers,
@@ -305,7 +305,7 @@ def _run_granian_in_subprocess(
     wc: int,
     threads: int,
     http: HTTPModes,
-    no_opt: bool,
+    opt: bool,
     backlog: int,
     blocking_threads: int,
     respawn_failed_workers: bool,
@@ -339,7 +339,7 @@ def _run_granian_in_subprocess(
         "threading-mode": threading_mode.value,
         "blocking-threads": blocking_threads,
         "loop": Loops.auto.value,
-        "opt": not no_opt,
+        "opt": opt,
         "respawn-failed-workers": respawn_failed_workers,
         "backlog": backlog,
     }
@@ -370,92 +370,3 @@ def _run_granian_in_subprocess(
         [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],  # noqa: S603
         check=True,
     )
-
-
-def _run_granian(
-    *,
-    env: LitestarEnv,
-    host: str,
-    port: int,
-    reload: bool,
-    wc: int,
-    threads: int,
-    http: HTTPModes,
-    no_opt: bool,
-    backlog: int,
-    blocking_threads: int,
-    respawn_failed_workers: bool,
-    http1_buffer_size: int,
-    http1_keep_alive: bool,
-    http1_pipeline_flush: bool,
-    http2_adaptive_window: bool,
-    http2_initial_connection_window_size: int,
-    http2_initial_stream_window_size: int,
-    http2_keep_alive_interval: int | None,
-    http2_keep_alive_timeout: int,
-    http2_max_concurrent_streams: int,
-    http2_max_frame_size: int,
-    http2_max_headers_size: int,
-    http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
-    ssl_keyfile: Path | None,
-    ssl_certificate: Path | None,
-    url_path_prefix: str | None,
-) -> None:
-    from dataclasses import asdict
-
-    from granian.constants import Interfaces, Loops
-    from granian.log import LogLevels
-    from granian.server import Granian
-    from litestar.logging.config import LoggingConfig
-
-    if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
-        if env.app.logging_config.loggers.get("_granian", None) is None:
-            env.app.logging_config.loggers.update(
-                {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
-            )
-        env.app.logging_config.configure()
-    log_dictconfig = (
-        {k: v for k, v in asdict(env.app.logging_config).items() if v is not None}  # type: ignore[call-overload]
-        if env.app.logging_config is not None
-        else None
-    )
-    Granian(
-        env.app_path,
-        address=host,
-        port=port,
-        interface=Interfaces.ASGI,
-        workers=wc,
-        threads=threads,
-        pthreads=blocking_threads,
-        threading_mode=threading_mode,
-        loop=Loops.uvloop,
-        loop_opt=not no_opt,
-        log_enabled=True,
-        log_level=LogLevels.info,
-        log_dictconfig=log_dictconfig,
-        http=http,
-        websockets=True,
-        backlog=backlog,
-        respawn_failed_workers=respawn_failed_workers,
-        http1_settings=HTTP1Settings(
-            keep_alive=http1_keep_alive,
-            max_buffer_size=http1_buffer_size,
-            pipeline_flush=http1_pipeline_flush,
-        ),
-        http2_settings=HTTP2Settings(
-            adaptive_window=http2_adaptive_window,
-            initial_connection_window_size=http2_initial_connection_window_size,
-            initial_stream_window_size=http2_initial_stream_window_size,
-            keep_alive_interval=http2_keep_alive_interval,
-            keep_alive_timeout=http2_keep_alive_timeout,
-            max_concurrent_streams=http2_max_concurrent_streams,
-            max_frame_size=http2_max_frame_size,
-            max_headers_size=http2_max_headers_size,
-            max_send_buffer_size=http2_max_send_buffer_size,
-        ),
-        reload=reload,
-        ssl_cert=ssl_certificate,
-        ssl_key=ssl_keyfile,
-        url_path_prefix=url_path_prefix,
-    ).serve()
