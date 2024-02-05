@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 )
 @option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
 @option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
-@option("--no-opt", help="Disable event loop optimizations", is_flag=True, default=False)
+@option("--opt", help="Enable additional event loop optimizations", is_flag=True, default=False)
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog.",
@@ -185,7 +185,7 @@ def run_command(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     http: HTTPModes,
-    no_opt: bool,
+    opt: bool,
     backlog: int,
     threading_mode: ThreadModes,
     ssl_keyfile: Path | None,
@@ -207,10 +207,12 @@ def run_command(
     """
     import os
 
+    from granian._loops import loops
     from granian.constants import ThreadModes
     from litestar.cli._utils import console, create_ssl_files, show_app_info
     from litestar.cli.commands.core import _server_lifespan
 
+    loops.get("auto")
     if debug is not None:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
@@ -254,7 +256,7 @@ def run_command(
             wc=workers,
             threads=threads,
             http=http,
-            no_opt=no_opt,
+            opt=opt,
             backlog=backlog,
             blocking_threads=blocking_threads,
             respawn_failed_workers=respawn_failed_workers,
@@ -303,7 +305,7 @@ def _run_granian_in_subprocess(
     wc: int,
     threads: int,
     http: HTTPModes,
-    no_opt: bool,
+    opt: bool,
     backlog: int,
     blocking_threads: int,
     respawn_failed_workers: bool,
@@ -337,7 +339,7 @@ def _run_granian_in_subprocess(
         "threading-mode": threading_mode.value,
         "blocking-threads": blocking_threads,
         "loop": Loops.auto.value,
-        "opt": not no_opt,
+        "opt": opt,
         "respawn-failed-workers": respawn_failed_workers,
         "backlog": backlog,
     }
