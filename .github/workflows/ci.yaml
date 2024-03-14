@@ -52,7 +52,7 @@ jobs:
         run: pdm install
 
       - name: Test
-        run: pdm run pytest -m "" -n auto
+        run: pdm run pytest -m ""
 
   build-docs:
     needs:
