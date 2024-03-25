@@ -10,6 +10,21 @@ import click
 from click import Context, command, option
 from granian.constants import HTTPModes, Loops, ThreadModes
 from granian.http import HTTP1Settings, HTTP2Settings
+from litestar.cli._utils import LitestarEnv
+
+try:
+    from litestar.cli._utils import isatty  # type: ignore[attr-defined]
+except ImportError:
+
+    def isatty() -> bool:  # pragma: nocover
+        """Detect if a terminal is TTY enabled.
+
+        This was added in Litestar 2.8 and is backported for compatibility.
+
+        This is a convenience wrapper around the built in system methods.  This allows for easier testing of TTY/non-TTY modes.
+        """
+        return sys.stdout.isatty()
+
 
 if TYPE_CHECKING:
     from litestar import Litestar
@@ -17,7 +32,7 @@ if TYPE_CHECKING:
 
 
 @command(name="run")
-@option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True)
+@option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
 @option(
     "-W",
     "--wc",
@@ -27,6 +42,7 @@ if TYPE_CHECKING:
     type=click.IntRange(min=1, max=multiprocessing.cpu_count() + 1),
     show_default=True,
     default=1,
+    envvar="WEB_CONCURRENCY",
 )
 @option(
     "--threads",
@@ -52,7 +68,7 @@ if TYPE_CHECKING:
     show_default=True,
     default=1024,
 )
-@option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True)
+@option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option(
     "--ssl-keyfile",
     type=click.Path(file_okay=True, exists=True, dir_okay=False, readable=True),
@@ -71,6 +87,7 @@ if TYPE_CHECKING:
     "--create-self-signed-cert",
     help="If certificate and key are not found at specified locations, create a self-signed certificate and a key",
     is_flag=True,
+    envvar="LITESTAR_CREATE_SELF_SIGNED_CERT",
 )
 @option(
     "--http1-buffer-size",
@@ -155,15 +172,15 @@ if TYPE_CHECKING:
     default=HTTP2Settings.max_send_buffer_size,
 )
 @option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
-@option("-d", "--debug", help="Run app in debug mode", is_flag=True)
-@option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True)
+@option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
+@option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
 @option(
     "--respawn-failed-workers/--no-respawn-failed-workers",
     help="Enable workers respawn on unexpected exit",
     default=False,
     is_flag=True,
 )
-@option("-r", "--reload", help="Reload server on changes", default=False, is_flag=True)
+@option("-r", "--reload", help="Reload server on changes", default=False, is_flag=True, envvar="LITESTAR_RELOAD")
 def run_command(
     app: Litestar,
     reload: bool,
@@ -218,7 +235,7 @@ def run_command(
         os.environ["LITESTAR_DEBUG"] = "1"
     if pdb:
         os.environ["LITESTAR_PDB"] = "1"
-
+    quiet_console = os.getenv("LITESTAR_QUIET_CONSOLE") or False
     if callable(ctx.obj):
         ctx.obj = ctx.obj()
     else:
@@ -234,20 +251,17 @@ def run_command(
         )
         sys.exit(1)
     threading_mode = threading_mode or ThreadModes.workers
-    host = env.host or host
+    host = env.host if env.host is not None else host
     port = env.port if env.port is not None else port
-    reload = env.reload or reload
-    workers = env.web_concurrency or wc
-    ssl_certificate = ssl_certificate or Path(env.certfile_path) if env.certfile_path is not None else None
-    ssl_keyfile = ssl_keyfile or Path(env.keyfile_path) if env.keyfile_path is not None else None
-    create_self_signed_cert = create_self_signed_cert or env.create_self_signed_cert
+    workers = wc
     if create_self_signed_cert:
         _cert, _key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
         ssl_certificate = ssl_certificate or Path(_cert) if _cert is not None else None
         ssl_keyfile = ssl_keyfile or Path(_key) if _key is not None else None
-    console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
 
-    show_app_info(env.app)
+    if not quiet_console and isatty():
+        console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
+        show_app_info(env.app)
     with _server_lifespan(env.app):
         _run_granian_in_subprocess(
             env=env,
