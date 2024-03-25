@@ -20,7 +20,7 @@ classifiers = [
   "Intended Audience :: System Administrators",
 ]
 dependencies = [
-  "litestar>=2.0.1",
+  "litestar>=2.0.1,<2.8.0",
   "granian>=1.0.0",
 ]
 description = "Granian plugin for Litestar"
