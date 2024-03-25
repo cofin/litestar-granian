@@ -1,7 +1,5 @@
 [project]
-authors = [
-  {name = "Cody Fincher", email = "cody.fincher@gmail.com"},
-]
+authors = [{ name = "Cody Fincher", email = "cody.fincher@gmail.com" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Web Environment",
@@ -19,17 +17,10 @@ classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
 ]
-dependencies = [
-  "litestar>=2.0.1,<2.8.0",
-  "granian>=1.0.0",
-]
+dependencies = ["litestar>=2.0.1", "granian>=1.0.0"]
 description = "Granian plugin for Litestar"
-keywords = [
-  "litestar",
-  "granian",
-  "asgi",
-]
-license = {text = "MIT"}
+keywords = ["litestar", "granian", "asgi"]
+license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -48,7 +39,7 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.pdm.dev-dependencies]
-dev = []
+dev = ["anyio"]
 docs = [
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
@@ -59,23 +50,11 @@ docs = [
   "sphinx-design>=0.5.0",
   "types-docutils",
 ]
-linting = [
-  "pre-commit>=3.4.0",
-  "mypy>=1.5.1",
-  "ruff>=0.0.287",
-  "sourcery",
-]
-test = [
-  "pytest>=7.4.1",
-  "pytest-cov",
-  "coverage",
-  "pytest-mock>=3.11.1",
-]
+linting = ["pre-commit>=3.4.0", "mypy>=1.5.1", "ruff>=0.0.287", "sourcery"]
+test = ["pytest>=7.4.1", "pytest-cov", "coverage", "pytest-mock>=3.11.1"]
 
 [tool.pytest.ini_options]
-filterwarnings = [
-  "ignore::DeprecationWarning:pkg_resources.*",
-]
+filterwarnings = ["ignore::DeprecationWarning:pkg_resources.*"]
 testpaths = ["tests"]
 
 [tool.coverage.report]
@@ -118,22 +97,22 @@ line-length = 120
 
 [tool.ruff]
 ignore = [
-  "A003", # flake8-builtins - class attribute {name} is shadowing a python builtin
-  "B010", # flake8-bugbear - do not call setattr with a constant attribute value
-  "D100", # pydocstyle - missing docstring in public module
-  "D101", # pydocstyle - missing docstring in public class
-  "D102", # pydocstyle - missing docstring in public method
-  "D103", # pydocstyle - missing docstring in public function
-  "D104", # pydocstyle - missing docstring in public package
-  "D105", # pydocstyle - missing docstring in magic method
-  "D106", # pydocstyle - missing docstring in public nested class
-  "D107", # pydocstyle - missing docstring in __init__
-  "D202", # pydocstyle - no blank lines allowed after function docstring
-  "D205", # pydocstyle - 1 blank line required between summary line and description
-  "D415", # pydocstyle - first line should end with a period, question mark, or exclamation point
-  "E501", # pycodestyle line too long, handled by black
+  "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
+  "D100",    # pydocstyle - missing docstring in public module
+  "D101",    # pydocstyle - missing docstring in public class
+  "D102",    # pydocstyle - missing docstring in public method
+  "D103",    # pydocstyle - missing docstring in public function
+  "D104",    # pydocstyle - missing docstring in public package
+  "D105",    # pydocstyle - missing docstring in magic method
+  "D106",    # pydocstyle - missing docstring in public nested class
+  "D107",    # pydocstyle - missing docstring in __init__
+  "D202",    # pydocstyle - no blank lines allowed after function docstring
+  "D205",    # pydocstyle - 1 blank line required between summary line and description
+  "D415",    # pydocstyle - first line should end with a period, question mark, or exclamation point
+  "E501",    # pycodestyle line too long, handled by black
   "PLW2901", # pylint - for loop variable overwritten by assignment target
-  "RUF012", # Ruff-specific rule - annotated with classvar
+  "RUF012",  # Ruff-specific rule - annotated with classvar
   "ANN401",
   "ANN102",
   "ANN101",
@@ -141,7 +120,7 @@ ignore = [
   "PLR0913", # too many arguments
   "PT",
   "TD",
-  "ARG002", # ignore for now; investigate
+  "ARG002",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
 ]
 line-length = 120
@@ -251,16 +230,16 @@ trim = true
 
 [tool.git-cliff.git]
 commit_parsers = [
-  {message = "^feat", group = "Features"},
-  {message = "^fix", group = "Bug Fixes"},
-  {message = "^doc", group = "Documentation"},
-  {message = "^perf", group = "Performance"},
-  {message = "^refactor", group = "Refactor"},
-  {message = "^style", group = "Styling"},
-  {message = "^test", group = "Testing"},
-  {message = "^chore\\(release\\): prepare for", skip = true},
-  {message = "^chore", group = "Miscellaneous Tasks"},
-  {body = ".*security", group = "Security"},
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^style", group = "Styling" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore\\(release\\): prepare for", skip = true },
+  { message = "^chore", group = "Miscellaneous Tasks" },
+  { body = ".*security", group = "Security" },
 ]
 conventional_commits = true
 filter_commits = false

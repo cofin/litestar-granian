@@ -8,6 +8,15 @@ from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
 from litestar_granian.cli import run_command
 
+try:
+    # this functionality only became available in litestar 2.6.
+    from litestar.plugins.structlog import StructlogPlugin
+except ImportError:  # pragma: nocover
+
+    class StructlogPlugin:  # type: ignore[no-redef] # pragma: nocover
+        """Fallback implementation for compatibility."""
+
+
 if TYPE_CHECKING:
     from click import Group
     from litestar.config.app import AppConfig
@@ -46,7 +55,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
             # this functionality only became available in litestar 2.6.  This conditional checks for this.
             for plugin in app_config.plugins:
                 if (
-                    plugin.__class__.__name__ == "StructlogPlugin"
+                    isinstance(plugin, StructlogPlugin)
                     and hasattr(plugin, "_config")
                     and (
                         plugin._config.structlog_logging_config.standard_lib_logging_config is not None  # noqa: SLF001
@@ -61,7 +70,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                         {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
                     )
                 if (
-                    plugin.__class__.__name__ == "StructlogPlugin"
+                    isinstance(plugin, StructlogPlugin)
                     and hasattr(plugin, "_config")
                     and (
                         plugin._config.structlog_logging_config.standard_lib_logging_config is not None  # noqa: SLF001
