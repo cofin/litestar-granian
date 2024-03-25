@@ -14,7 +14,7 @@ from litestar.cli._utils import LitestarEnv
 
 try:
     from litestar.cli._utils import isatty  # type: ignore[attr-defined]
-except ImportError:
+except ImportError:  # pragma: nocover
 
     def isatty() -> bool:  # pragma: nocover
         """Detect if a terminal is TTY enabled.
