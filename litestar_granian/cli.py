@@ -4,7 +4,7 @@ import multiprocessing
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import click
 from click import Context, command, option
@@ -132,9 +132,10 @@ if TYPE_CHECKING:
 @option(
     "--http2-keep-alive-interval",
     help="Sets an interval for HTTP2 Ping frames should be sent to keep a connection alive",
-    type=Optional[int],
+    type=int,
+    required=False,
     show_default=False,
-    default=HTTP2Settings.keep_alive_interval,
+    default=None,
 )
 @option(
     "--http2-keep-alive-timeout",
