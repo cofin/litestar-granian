@@ -231,7 +231,7 @@ def run_command(
     from litestar.cli.commands.core import _server_lifespan
 
     loops.get("auto")
-    if debug is not None:
+    if debug:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
     if pdb:
