@@ -13,7 +13,7 @@ from granian.http import HTTP1Settings, HTTP2Settings
 from litestar.cli._utils import LitestarEnv
 
 try:
-    from litestar.cli._utils import isatty  # type: ignore[attr-defined]
+    from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
 except ImportError:  # pragma: nocover
 
     def isatty() -> bool:  # pragma: nocover
