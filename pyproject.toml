@@ -1,5 +1,5 @@
 [project]
-authors = [{ name = "Cody Fincher", email = "cody.fincher@gmail.com" }]
+authors = [{ name = "Cody Fincher", email = "cody@litestar.dev" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Web Environment",
@@ -17,14 +17,14 @@ classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
 ]
-dependencies = ["litestar>=2.0.1", "granian>=1.0.0"]
+dependencies = ["litestar>=2.0.1", "granian[all]>=1.3.0"]
 description = "Granian plugin for Litestar"
 keywords = ["litestar", "granian", "asgi"]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.2.6"
+version = "0.3.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -38,22 +38,38 @@ Source = "https://github.com/cofin/litestar-granian"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.pdm]
+ignore_package_warnings = [
+  "alabaster",
+  "sphinxcontrib-*",
+  "sphinx-*",
+  "sphinx",
+  "pre-commit",
+  "pydata-sphinx-*",
+  "slotscheck",
+]
+
 [tool.pdm.dev-dependencies]
 dev = ["anyio"]
 docs = [
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
-  "shibuya>=2023.9.3",
   "sphinx-click>=5.0.1",
   "sphinx-toolbox>=3.5.0",
   "sphinx-design>=0.5.0",
-  "types-docutils",
+  "sphinx-paramlinks>=0.6.0",
+  "sphinx-togglebutton>=0.3.2",
+  #    "litestar-sphinx-theme @ {root:uri}/../litestar-sphinx-theme", # only needed when working on the theme
+  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git@v3",
+  "auto-pytabs[sphinx]>=0.4.0",
+  "git-cliff>=2.2.1",
 ]
-linting = ["pre-commit>=3.4.0", "mypy>=1.5.1", "ruff>=0.0.287", "sourcery"]
-test = ["pytest>=7.4.1", "pytest-cov", "coverage", "pytest-mock>=3.11.1"]
+linting = ["pre-commit>=3.4.0", "mypy>=1.5.1", "ruff>=0.0.287", "sourcery", "types-click"]
+test = ["pytest>=7.4.1", "pytest-cov", "coverage", "pytest-mock>=3.11.1", "pytest-sugar"]
 
 [tool.pytest.ini_options]
+addopts = ["-ra"]
 filterwarnings = ["ignore::DeprecationWarning:pkg_resources.*"]
 testpaths = ["tests"]
 

@@ -13,7 +13,7 @@ from granian.http import HTTP1Settings, HTTP2Settings
 from litestar.cli._utils import LitestarEnv
 
 try:
-    from litestar.cli._utils import isatty  # type: ignore[attr-defined]
+    from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
 except ImportError:  # pragma: nocover
 
     def isatty() -> bool:  # pragma: nocover
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from litestar.cli._utils import LitestarEnv
 
 
-@command(name="run")
+@command(name="run", context_settings={"show_default": True}, help="Start application server")
 @option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
 @option(
     "-W",
@@ -181,7 +181,16 @@ if TYPE_CHECKING:
     default=False,
     is_flag=True,
 )
-@option("-r", "--reload", help="Reload server on changes", default=False, is_flag=True, envvar="LITESTAR_RELOAD")
+@option(
+    "--respawn-interval",
+    default=3.5,
+    help="The number of seconds to sleep between workers respawn",
+)
+@option("-r", "--reload/--no-reload", help="Reload server on changes", default=False, is_flag=True)
+@option(
+    "--process-name",
+    help="Set a custom name for processes.",
+)
 def run_command(
     app: Litestar,
     reload: bool,
@@ -190,6 +199,7 @@ def run_command(
     threads: int,
     blocking_threads: int,
     respawn_failed_workers: bool,
+    respawn_interval: float,
     http1_keep_alive: bool,
     http1_buffer_size: int,
     http1_pipeline_flush: bool,
@@ -211,6 +221,7 @@ def run_command(
     create_self_signed_cert: bool,
     url_path_prefix: str | None,
     host: str,
+    process_name: str | None,
     debug: bool,
     pdb: bool,
     ctx: Context,
@@ -275,6 +286,7 @@ def run_command(
             backlog=backlog,
             blocking_threads=blocking_threads,
             respawn_failed_workers=respawn_failed_workers,
+            respawn_interval=respawn_interval,
             http1_buffer_size=http1_buffer_size,
             http1_keep_alive=http1_keep_alive,
             http1_pipeline_flush=http1_pipeline_flush,
@@ -288,6 +300,7 @@ def run_command(
             http2_max_headers_size=http2_max_headers_size,
             http2_max_send_buffer_size=http2_max_send_buffer_size,
             threading_mode=threading_mode,
+            process_name=process_name,
             ssl_keyfile=ssl_keyfile,
             ssl_certificate=ssl_certificate,
             url_path_prefix=url_path_prefix,
@@ -324,6 +337,7 @@ def _run_granian_in_subprocess(
     backlog: int,
     blocking_threads: int,
     respawn_failed_workers: bool,
+    respawn_interval: float,
     http1_buffer_size: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
@@ -337,6 +351,7 @@ def _run_granian_in_subprocess(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     threading_mode: ThreadModes,
+    process_name: str | None,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
@@ -356,6 +371,7 @@ def _run_granian_in_subprocess(
         "loop": Loops.auto.value,
         "opt": opt,
         "respawn-failed-workers": respawn_failed_workers,
+        "respawn-interval": respawn_interval,
         "backlog": backlog,
     }
     if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
@@ -381,6 +397,8 @@ def _run_granian_in_subprocess(
         process_args["ssl-certfile"] = ssl_certificate
     if ssl_keyfile is not None:
         process_args["ssl-keyfile"] = ssl_keyfile
+    if process_name is not None:
+        process_args["process-name"] = process_name
     subprocess.run(
         [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],  # noqa: S603
         check=True,
