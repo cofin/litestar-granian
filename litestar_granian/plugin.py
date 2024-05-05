@@ -24,7 +24,6 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
         from litestar.cli.main import litestar_group as cli
 
         cli.add_command(run_command)
-        return super().on_cli_init(cli)
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         if app_config.logging_config is not None and isinstance(app_config.logging_config, LoggingConfig):

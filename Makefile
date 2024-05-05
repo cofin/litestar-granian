@@ -47,6 +47,7 @@ install:											## Install the project and
 
 clean: 												## Cleanup temporary build artifacts
 	@echo "=> Cleaning working directory"
+	@if [ "$(USING_PDM)" ]; then $(PDM) run pre-commit clean; fi
 	@rm -rf .pytest_cache .ruff_cache .hypothesis build/ -rf dist/ .eggs/
 	@find . -name '*.egg-info' -exec rm -rf {} +
 	@find . -name '*.egg' -exec rm -f {} +
