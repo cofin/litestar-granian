@@ -50,7 +50,7 @@ ignore_package_warnings = [
 ]
 
 [tool.pdm.dev-dependencies]
-dev = []
+dev = ["anyio"]
 docs = [
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
