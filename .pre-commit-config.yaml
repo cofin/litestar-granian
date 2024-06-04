@@ -15,13 +15,13 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.4.3"
+    rev: "v0.4.7"
     hooks:
       - id: ruff
         args: ["--fix"]
         exclude: "docs"
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+    rev: v2.3.0
     hooks:
       - id: codespell
   - repo: https://github.com/pre-commit/mirrors-mypy

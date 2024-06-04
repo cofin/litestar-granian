@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 import click
 from click import Context, command, option
-from granian.constants import HTTPModes, Loops, ThreadModes
+from granian import Granian
+from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
+from granian.errors import ConfigurationError
 from granian.http import HTTP1Settings, HTTP2Settings
 from litestar.cli._utils import LitestarEnv
 
@@ -42,7 +44,7 @@ if TYPE_CHECKING:
     type=click.IntRange(min=1, max=multiprocessing.cpu_count() + 1),
     show_default=True,
     default=1,
-    envvar="WEB_CONCURRENCY",
+    envvar=["LITESTAR_WEB_CONCURRENCY", "WEB_CONCURRENCY"],
 )
 @option(
     "--threads",
@@ -239,7 +241,7 @@ def run_command(
     from granian._loops import loops
     from granian.constants import ThreadModes
     from litestar.cli._utils import console, create_ssl_files, show_app_info
-    from litestar.cli.commands.core import _server_lifespan
+    from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 
     loops.get("auto")
     if debug:
@@ -263,8 +265,6 @@ def run_command(
         )
         sys.exit(1)
     threading_mode = threading_mode or ThreadModes.workers
-    host = env.host if env.host is not None else host
-    port = env.port if env.port is not None else port
     workers = wc
     if create_self_signed_cert:
         _cert, _key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
@@ -275,7 +275,7 @@ def run_command(
         console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
         show_app_info(env.app)
     with _server_lifespan(env.app):
-        _run_granian_in_subprocess(
+        _run_granian(
             env=env,
             reload=reload,
             port=port,
@@ -324,6 +324,83 @@ def _convert_granian_args(args: dict[str, Any]) -> list[str]:
     return process_args
 
 
+def _run_granian(
+    env: LitestarEnv,
+    host: str,
+    port: int,
+    reload: bool,
+    wc: int,
+    threads: int,
+    http: HTTPModes,
+    opt: bool,
+    backlog: int,
+    blocking_threads: int,
+    respawn_failed_workers: bool,
+    respawn_interval: float,
+    http1_buffer_size: int,
+    http1_keep_alive: bool,
+    http1_pipeline_flush: bool,
+    http2_adaptive_window: bool,
+    http2_initial_connection_window_size: int,
+    http2_initial_stream_window_size: int,
+    http2_keep_alive_interval: int | None,
+    http2_keep_alive_timeout: int,
+    http2_max_concurrent_streams: int,
+    http2_max_frame_size: int,
+    http2_max_headers_size: int,
+    http2_max_send_buffer_size: int,
+    threading_mode: ThreadModes,
+    process_name: str | None,
+    ssl_keyfile: Path | None,
+    ssl_certificate: Path | None,
+    url_path_prefix: str | None,
+) -> None:
+    server = Granian(
+        env.app_path,
+        address=host,
+        port=port,
+        interface=Interfaces.ASGI,
+        workers=wc,
+        threads=threads,
+        blocking_threads=blocking_threads,
+        threading_mode=threading_mode,
+        loop=Loops.auto,
+        loop_opt=opt,
+        http=http,
+        websockets=http.value != HTTPModes.http2.value,
+        backlog=backlog,
+        backpressure=None,
+        http1_settings=HTTP1Settings(
+            keep_alive=http1_keep_alive,
+            max_buffer_size=http1_buffer_size,
+            pipeline_flush=http1_pipeline_flush,
+        ),
+        http2_settings=HTTP2Settings(
+            adaptive_window=http2_adaptive_window,
+            initial_connection_window_size=http2_initial_connection_window_size,
+            initial_stream_window_size=http2_initial_stream_window_size,
+            keep_alive_interval=http2_keep_alive_interval,
+            keep_alive_timeout=http2_keep_alive_timeout,
+            max_concurrent_streams=http2_max_concurrent_streams,
+            max_frame_size=http2_max_frame_size,
+            max_headers_size=http2_max_headers_size,
+            max_send_buffer_size=http2_max_send_buffer_size,
+        ),
+        ssl_cert=ssl_certificate,
+        ssl_key=ssl_keyfile,
+        url_path_prefix=url_path_prefix,
+        respawn_failed_workers=respawn_failed_workers,
+        respawn_interval=respawn_interval,
+        reload=reload,
+        process_name=process_name,
+    )
+
+    try:
+        server.serve()
+    except ConfigurationError:
+        raise click.exceptions.Exit(1)  # noqa: B904
+
+
 def _run_granian_in_subprocess(
     *,
     env: LitestarEnv,
@@ -356,8 +433,6 @@ def _run_granian_in_subprocess(
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
 ) -> None:
-    from granian.constants import Interfaces
-
     process_args: dict[str, Any] = {
         "reload": reload,
         "host": host,
