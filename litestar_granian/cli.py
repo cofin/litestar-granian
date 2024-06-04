@@ -10,7 +10,6 @@ import click
 from click import Context, command, option
 from granian import Granian
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
-from granian.errors import ConfigurationError
 from granian.http import HTTP1Settings, HTTP2Settings
 from litestar.cli._utils import LitestarEnv
 
@@ -397,7 +396,7 @@ def _run_granian(
 
     try:
         server.serve()
-    except ConfigurationError:
+    except Exception as _:  # noqa: BLE001
         raise click.exceptions.Exit(1)  # noqa: B904
 
 
