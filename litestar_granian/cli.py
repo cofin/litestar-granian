@@ -354,6 +354,28 @@ def _run_granian(
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
 ) -> None:
+    if http.value == HTTPModes.http2.value:
+        http1_settings = None
+        http2_settings = HTTP2Settings(
+            adaptive_window=http2_adaptive_window,
+            initial_connection_window_size=http2_initial_connection_window_size,
+            initial_stream_window_size=http2_initial_stream_window_size,
+            keep_alive_interval=http2_keep_alive_interval,
+            keep_alive_timeout=http2_keep_alive_timeout,
+            max_concurrent_streams=http2_max_concurrent_streams,
+            max_frame_size=http2_max_frame_size,
+            max_headers_size=http2_max_headers_size,
+            max_send_buffer_size=http2_max_send_buffer_size,
+        )
+
+    else:
+        http1_settings = HTTP1Settings(
+            keep_alive=http1_keep_alive,
+            max_buffer_size=http1_buffer_size,
+            pipeline_flush=http1_pipeline_flush,
+        )
+        http2_settings = None
+
     server = Granian(
         env.app_path,
         address=host,
@@ -369,22 +391,8 @@ def _run_granian(
         websockets=http.value != HTTPModes.http2.value,
         backlog=backlog,
         backpressure=None,
-        http1_settings=HTTP1Settings(
-            keep_alive=http1_keep_alive,
-            max_buffer_size=http1_buffer_size,
-            pipeline_flush=http1_pipeline_flush,
-        ),
-        http2_settings=HTTP2Settings(
-            adaptive_window=http2_adaptive_window,
-            initial_connection_window_size=http2_initial_connection_window_size,
-            initial_stream_window_size=http2_initial_stream_window_size,
-            keep_alive_interval=http2_keep_alive_interval,
-            keep_alive_timeout=http2_keep_alive_timeout,
-            max_concurrent_streams=http2_max_concurrent_streams,
-            max_frame_size=http2_max_frame_size,
-            max_headers_size=http2_max_headers_size,
-            max_send_buffer_size=http2_max_send_buffer_size,
-        ),
+        http1_settings=http1_settings,
+        http2_settings=http2_settings,
         ssl_cert=ssl_certificate,
         ssl_key=ssl_keyfile,
         url_path_prefix=url_path_prefix,
