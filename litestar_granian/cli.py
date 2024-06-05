@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -9,10 +10,12 @@ from typing import TYPE_CHECKING
 import click
 from click import Context, command, option
 from granian import Granian
+from granian._loops import loops
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
-from litestar.cli._utils import LitestarEnv
+from litestar.cli._utils import LitestarEnv, console, create_ssl_files, show_app_info
+from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 from litestar.logging import LoggingConfig
 
 try:
@@ -75,6 +78,7 @@ if TYPE_CHECKING:
     "--backpressure",
     type=click.IntRange(1),
     show_default="backlog/workers",
+    default=None,
     help="Maximum number of requests to process concurrently (per worker)",
 )
 @option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
@@ -195,10 +199,16 @@ if TYPE_CHECKING:
     default=3.5,
     help="The number of seconds to sleep between workers respawn",
 )
-@option("-r", "--reload/--no-reload", help="Reload server on changes", default=False, is_flag=True)
+@option(
+    "-r",
+    "--reload/--no-reload",
+    help="Enable auto reload on application's files changes (requires granian[reload] extra)",
+    default=False,
+    is_flag=True,
+)
 @option(
     "--process-name",
-    help="Set a custom name for processes.",
+    help="Set a custom name for processes (requires granian[pname] extra)",
 )
 def run_command(
     app: Litestar,
@@ -224,6 +234,7 @@ def run_command(
     http: HTTPModes,
     opt: bool,
     backlog: int,
+    backpressure: int | None,
     threading_mode: ThreadModes,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
@@ -243,12 +254,6 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-    import os
-
-    from granian._loops import loops
-    from granian.constants import ThreadModes
-    from litestar.cli._utils import console, create_ssl_files, show_app_info
-    from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 
     loops.get("auto")
     if debug:
@@ -291,6 +296,7 @@ def run_command(
             http=http,
             opt=opt,
             backlog=backlog,
+            backpressure=backpressure,
             blocking_threads=blocking_threads,
             respawn_failed_workers=respawn_failed_workers,
             respawn_interval=respawn_interval,
@@ -325,6 +331,7 @@ def _run_granian(
     http: HTTPModes,
     opt: bool,
     backlog: int,
+    backpressure: int | None,
     blocking_threads: int,
     respawn_failed_workers: bool,
     respawn_interval: float,
@@ -393,7 +400,7 @@ def _run_granian(
         http=http,
         websockets=http.value != HTTPModes.http2.value,
         backlog=backlog,
-        backpressure=None,
+        backpressure=backpressure,
         http1_settings=http1_settings,
         http2_settings=http2_settings,
         ssl_cert=ssl_certificate,
