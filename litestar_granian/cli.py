@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import multiprocessing
-import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import click
 from click import Context, command, option
 from granian import Granian
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
 from granian.http import HTTP1Settings, HTTP2Settings
+from granian.log import LogLevels
 from litestar.cli._utils import LitestarEnv
+from litestar.logging import LoggingConfig
 
 try:
     from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
@@ -64,10 +66,16 @@ if TYPE_CHECKING:
 @option("--opt", help="Enable additional event loop optimizations", is_flag=True, default=False)
 @option(
     "--backlog",
-    help="Maximum number of connections to hold in backlog.",
+    help="Maximum number of connections to hold in backlog (globally)",
     type=click.IntRange(min=128),
     show_default=True,
     default=1024,
+)
+@option(
+    "--backpressure",
+    type=click.IntRange(1),
+    show_default="backlog/workers",
+    help="Maximum number of requests to process concurrently (per worker)",
 )
 @option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option(
@@ -267,8 +275,8 @@ def run_command(
     workers = wc
     if create_self_signed_cert:
         _cert, _key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
-        ssl_certificate = ssl_certificate or Path(_cert) if _cert is not None else None
-        ssl_keyfile = ssl_keyfile or Path(_key) if _key is not None else None
+        ssl_certificate = ssl_certificate or Path(_cert) if _cert is not None else None  # pyright: ignore[reportUnnecessaryComparison]
+        ssl_keyfile = ssl_keyfile or Path(_key) if _key is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     if not quiet_console and isatty():
         console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
@@ -307,22 +315,6 @@ def run_command(
         )
 
 
-def _convert_granian_args(args: dict[str, Any]) -> list[str]:
-    process_args = []
-    for arg, value in args.items():
-        if isinstance(value, bool):
-            if value:
-                process_args.append(f"--{arg}")
-            else:
-                process_args.append(f"--no-{arg}")
-        elif isinstance(value, tuple):
-            process_args.extend(f"--{arg}={item}" for item in value)
-        else:
-            process_args.append(f"--{arg}={value}")
-
-    return process_args
-
-
 def _run_granian(
     env: LitestarEnv,
     host: str,
@@ -354,6 +346,17 @@ def _run_granian(
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
 ) -> None:
+    if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
+        if env.app.logging_config.loggers.get("_granian", None) is None:
+            env.app.logging_config.loggers.update(
+                {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
+            )
+        env.app.logging_config.configure()
+    log_dictconfig = (
+        {k: v for k, v in asdict(env.app.logging_config).items() if v is not None}  # type: ignore[call-overload]
+        if env.app.logging_config is not None
+        else None
+    )
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
@@ -400,88 +403,12 @@ def _run_granian(
         respawn_interval=respawn_interval,
         reload=reload,
         process_name=process_name,
+        log_enabled=True,
+        log_level=LogLevels.info,
+        log_dictconfig=log_dictconfig,
     )
 
     try:
         server.serve()
     except Exception as _:  # noqa: BLE001
         raise click.exceptions.Exit(1)  # noqa: B904
-
-
-def _run_granian_in_subprocess(
-    *,
-    env: LitestarEnv,
-    host: str,
-    port: int,
-    reload: bool,
-    wc: int,
-    threads: int,
-    http: HTTPModes,
-    opt: bool,
-    backlog: int,
-    blocking_threads: int,
-    respawn_failed_workers: bool,
-    respawn_interval: float,
-    http1_buffer_size: int,
-    http1_keep_alive: bool,
-    http1_pipeline_flush: bool,
-    http2_adaptive_window: bool,
-    http2_initial_connection_window_size: int,
-    http2_initial_stream_window_size: int,
-    http2_keep_alive_interval: int | None,
-    http2_keep_alive_timeout: int,
-    http2_max_concurrent_streams: int,
-    http2_max_frame_size: int,
-    http2_max_headers_size: int,
-    http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
-    process_name: str | None,
-    ssl_keyfile: Path | None,
-    ssl_certificate: Path | None,
-    url_path_prefix: str | None,
-) -> None:
-    process_args: dict[str, Any] = {
-        "reload": reload,
-        "host": host,
-        "port": port,
-        "interface": Interfaces.ASGI.value,
-        "http": http.value,
-        "threads": threads,
-        "workers": wc,
-        "threading-mode": threading_mode.value,
-        "blocking-threads": blocking_threads,
-        "loop": Loops.auto.value,
-        "opt": opt,
-        "respawn-failed-workers": respawn_failed_workers,
-        "respawn-interval": respawn_interval,
-        "backlog": backlog,
-    }
-    if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
-        process_args["http1-keep-alive"] = http1_keep_alive
-        process_args["http1-buffer-size"] = http1_buffer_size
-        process_args["http1-pipeline-flush"] = http1_pipeline_flush
-    if http.value == HTTPModes.http2.value:
-        process_args["http2-adaptive-window"] = http2_adaptive_window
-        process_args["http2-initial-connection-window-size"] = http2_initial_connection_window_size
-        process_args["http2-initial-stream-window-size"] = http2_initial_stream_window_size
-        if http2_keep_alive_interval is not None:
-            process_args["http2-keep-alive-interval"] = http2_keep_alive_interval
-        process_args["http2-keep-alive-timeout"] = http2_keep_alive_timeout
-        process_args["http2-max-concurrent-streams"] = http2_max_concurrent_streams
-        process_args["http2-max-frame-size"] = http2_max_frame_size
-        process_args["http2-max-headers-size"] = http2_max_headers_size
-        process_args["http2-max-send-buffer-size"] = http2_max_send_buffer_size
-        # websockets aren't supported in http2 only?
-        process_args["websockets"] = False
-    if url_path_prefix is not None:
-        process_args["url-path-prefix"] = url_path_prefix
-    if ssl_certificate is not None:
-        process_args["ssl-certfile"] = ssl_certificate
-    if ssl_keyfile is not None:
-        process_args["ssl-keyfile"] = ssl_keyfile
-    if process_name is not None:
-        process_args["process-name"] = process_name
-    subprocess.run(
-        [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],  # noqa: S603
-        check=True,
-    )
