@@ -59,7 +59,7 @@ jobs:
         uses: codecov/codecov-action@v4.4.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: litestar-org/pytest-databases
+          slug: litestar-org/litestar-granian
   # sonar:
   #   needs:
   #     - run
@@ -76,7 +76,7 @@ jobs:
   #         name: coverage-xml
 
   #     - name: Fix coverage file for sonarcloud
-  #       run: sed -i "s/home\/runner\/work\/pytest-databases\/pytest-databases/github\/workspace/g" coverage.xml
+  #       run: sed -i "s/home\/runner\/work\/litestar-granian\/litestar-granian/github\/workspace/g" coverage.xml
 
   #     - name: SonarCloud Scan
   #       uses: sonarsource/sonarcloud-github-action@master
