@@ -367,6 +367,7 @@ def _run_granian(
         else None
     )
     if log_dictconfig is not None:
+        log_dictconfig["version"] = 1
         logging.config.dictConfig(log_dictconfig)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
