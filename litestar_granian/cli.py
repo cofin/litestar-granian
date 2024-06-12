@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging.config
 import multiprocessing
 import os
 import sys
+import logging
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -364,6 +366,7 @@ def _run_granian(
         if env.app.logging_config is not None
         else None
     )
+    log_dictconfig = logging.config.dictConfig(log_dictconfig)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
