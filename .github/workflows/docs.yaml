@@ -1,12 +1,13 @@
-name: Documentation Building
-
+name: Documentation
 on:
   release:
     types: [published]
   push:
     branches:
       - main
-
+env:
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "1"
 jobs:
   docs:
     permissions:
@@ -15,29 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: 3.11
 
-      - uses: pdm-project/setup-pdm@v3
-        name: Set up PDM
-        with:
-          python-version: "3.11"
-          allow-python-prereleases: true
-          cache: true
-
-      - name: Install dependencies
-        run: pdm install -G:docs
-
-      - name: Fetch gh pages
-        run: git fetch origin gh-pages --depth=1
+      - name: Install Hatch
+        run: pip install --upgrade hatch hatch-pip-compile
 
       - name: Build release docs
-        run: pdm run python tools/build_docs.py docs-build
+        run: hatch run docs:python scripts/build_docs.py docs-build
         if: github.event_name == 'release'
 
       - name: Build dev docs
-        run: pdm run python tools/build_docs.py docs-build
+        run: hatch run docs:python scripts/build_docs.py docs-build
         if: github.event_name == 'push'
 
       - name: Deploy

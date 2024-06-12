@@ -18,31 +18,36 @@ PDM 			?= 	pdm $(PDM_OPTS)
 help: 		   										## Display this help text for Makefile
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-.PHONY: upgrade
-upgrade:       										## Upgrade all dependencies to the latest stable versions
-	@echo "=> Updating all dependencies"
-	@if [ "$(USING_PDM)" ]; then $(PDM) update; fi
-	@echo "=> Dependencies Updated"
-	@$(ENV_PREFIX)pre-commit autoupdate
-	@echo "=> Updated Pre-commit"
+ 
 
 # =============================================================================
 # Developer Utils
 # =============================================================================
-.PHONY: install-pdm
-install-pdm: 										## Install latest version of PDM
-	@curl -sSLO https://pdm.fming.dev/install-pdm.py && \
-	curl -sSL https://pdm.fming.dev/install-pdm.py.sha256 | shasum -a 256 -c - && \
-	python3 install-pdm.py
+install-hatch: 										## Install Hatch
+	@sh ./scripts/install-hatch.sh ~/.local/bin/
 
-install:											## Install the project and
-	@if ! $(PDM) --version > /dev/null; then echo '=> Installing PDM'; $(MAKE) install-pdm; fi
-	@if [ "$(VENV_EXISTS)" ]; then echo "=> Removing existing virtual environment"; fi
-	if [ "$(VENV_EXISTS)" ]; then $(MAKE) destroy; fi
-	if [ "$(VENV_EXISTS)" ]; then $(MAKE) clean; fi
-	@if [ "$(USING_PDM)" ]; then $(PDM) config venv.in_project true && python3 -m venv --copies .venv && . $(ENV_PREFIX)/activate && $(ENV_PREFIX)/pip install --quiet -U wheel setuptools cython pip; fi
-	@if [ "$(USING_PDM)" ]; then $(PDM) install -G:all; fi
+configure-hatch: 										## Configure Hatch defaults
+	@hatch config set dirs.env.virtual .direnv
+	@hatch config set dirs.env.pip-compile .direnv
+
+upgrade-hatch: 										## Update Hatch, UV, and Ruff
+	@hatch self update
+
+.PHONY: upgrade
+upgrade:       										## Upgrade all dependencies to the latest stable versions
+	@echo "=> Updating all dependencies"
+	@hatch run lint:pre-commit autoupdate
+	@echo "=> Updated Pre-commit"
+
+install: 										## Install the project and all dependencies
+	@if [ "$(VENV_EXISTS)" ]; then echo "=> Removing existing virtual environment"; $(MAKE) destroy-venv; fi
+	@$(MAKE) clean
+	@if ! hatch --version > /dev/null; then echo '=> Installing `hatch` with standalone installation'; $(MAKE) install-hatch ; fi
+	@echo "=> Creating Python environments..."
+	@$(MAKE) configure-hatch
+	@hatch env create local
 	@echo "=> Install complete! Note: If you want to re-install re-run 'make install'"
+
 
 
 clean: 												## Cleanup temporary build artifacts
