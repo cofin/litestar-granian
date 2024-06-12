@@ -112,7 +112,8 @@ include = '\.pyi?$'
 line-length = 120
 
 [tool.ruff]
-ignore = [
+line-length = 120
+lint.ignore = [
   "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
   "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
   "D100",    # pydocstyle - missing docstring in public module
@@ -139,18 +140,17 @@ ignore = [
   "ARG002",  # ignore for now; investigate
   "PERF203", # ignore for now; investigate
 ]
-line-length = 120
-select = ["ALL"]
+lint.select = ["ALL"]
 src = ["litestar_granian", "tests"]
 target-version = "py38"
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 12
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/**/*.*" = [
   "A",
   "ARG",
@@ -177,12 +177,11 @@ max-complexity = 12
   "UP006",
   "SLF001",
 ]
+[tool.ruff.lint.isort]
+known-first-party = ["litestar_granian", "tests"]
 
 [tool.slotscheck]
 strict-imports = false
-
-[tool.ruff.isort]
-known-first-party = ["litestar_granian", "tests"]
 
 [tool.mypy]
 disallow_any_generics = false
