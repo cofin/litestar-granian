@@ -18,7 +18,7 @@ PDM 			?= 	pdm $(PDM_OPTS)
 help: 		   										## Display this help text for Makefile
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
- 
+
 
 # =============================================================================
 # Developer Utils
@@ -32,6 +32,12 @@ configure-hatch: 										## Configure Hatch defaults
 
 upgrade-hatch: 										## Update Hatch, UV, and Ruff
 	@hatch self update
+
+destroy-venv: 											## Destroy the virtual environment
+	@hatch env prune
+	@hatch env remove lint
+	@rm -Rf .venv
+	@rm -Rf .direnv
 
 .PHONY: upgrade
 upgrade:       										## Upgrade all dependencies to the latest stable versions

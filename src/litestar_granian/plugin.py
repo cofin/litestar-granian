@@ -29,8 +29,8 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
 
     __slots__ = ()
 
-    def on_cli_init(self, cli: Group) -> None:
-        from litestar.cli.main import litestar_group as cli
+    def on_cli_init(self, cli: Group) -> None:  # noqa: PLR6301
+        from litestar.cli.main import litestar_group as cli  # noqa: PLC0415
 
         cli.add_command(run_command)
 
@@ -57,30 +57,30 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                     isinstance(plugin, StructlogPlugin)
                     and hasattr(plugin, "_config")
                     and (
-                        plugin._config.structlog_logging_config.standard_lib_logging_config is not None  # noqa: SLF001
-                        and plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.get(  # noqa: SLF001
+                        plugin._config.structlog_logging_config.standard_lib_logging_config is not None
+                        and plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.get(
                             "_granian",
                             None,
                         )
                         is None
                     )
                 ):
-                    plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.update(  # noqa: SLF001
+                    plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.update(
                         {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
                     )
                 if (
                     isinstance(plugin, StructlogPlugin)
                     and hasattr(plugin, "_config")
                     and (
-                        plugin._config.structlog_logging_config.standard_lib_logging_config is not None  # noqa: SLF001
-                        and plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.get(  # noqa: SLF001
+                        plugin._config.structlog_logging_config.standard_lib_logging_config is not None
+                        and plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.get(
                             "standard",
                             None,
                         )
                         is None
                     )
                 ):
-                    plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(  # noqa: SLF001
+                    plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(
                         {"standard": {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"}},
                     )
         return super().on_app_init(app_config)

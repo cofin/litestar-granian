@@ -1,23 +1,26 @@
 from __future__ import annotations
 
-import logging
-import logging.config
 import multiprocessing
 import os
 import sys
-from dataclasses import asdict
+from dataclasses import fields
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
 from click import Context, command, option
 from granian import Granian
-from granian._loops import loops
+from granian._loops import loops  # noqa: PLC2701
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
-from litestar.cli._utils import LitestarEnv, console, create_ssl_files, show_app_info
-from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
+from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
+    LitestarEnv,
+    console,  # noqa: PLC2701
+    create_ssl_files,  # noqa: PLC2701
+    show_app_info,  # noqa: PLC2701
+)
+from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]  # noqa: PLC2701
 from litestar.logging import LoggingConfig
 
 try:
@@ -27,7 +30,7 @@ except ImportError:  # pragma: nocover
     def isatty() -> bool:  # pragma: nocover
         """Detect if a terminal is TTY enabled.
 
-        This was added in Litestar 2.8 and is backported for compatibility.
+        This was added in Litestar 2.8 and is back-ported for compatibility.
 
         This is a convenience wrapper around the built in system methods.  This allows for easier testing of TTY/non-TTY modes.
         """
@@ -361,14 +364,18 @@ def _run_granian(
                 {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
             )
         env.app.logging_config.configure()
+    excluded_fields = {"configure_root_logger", "incremental"}
     log_dictconfig = (
-        {k: v for k, v in asdict(env.app.logging_config).items() if v is not None}  # type: ignore[call-overload]
+        {
+            _field.name: getattr(env.app.logging_config, _field.name)
+            for _field in fields(env.app.logging_config)  # type: ignore[arg-type]
+            if getattr(env.app.logging_config, _field.name) is not None and _field.name not in excluded_fields
+        }
         if env.app.logging_config is not None
         else None
     )
     if log_dictconfig is not None:
         log_dictconfig["version"] = 1
-        logging.config.dictConfig(log_dictconfig)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
@@ -417,7 +424,7 @@ def _run_granian(
         process_name=process_name,
         log_enabled=True,
         log_level=LogLevels.info,
-        log_dictconfig=None,
+        log_dictconfig=log_dictconfig,
     )
 
     try:
