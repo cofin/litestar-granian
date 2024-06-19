@@ -200,7 +200,7 @@ fix = [
   "pre-commit run --all-files",
 ]
 style = ["echo \"VERSION: `ruff --version`\"", "ruff check {args:.}", "ruff format --check {args:.}"]
-typing = ["echo \"VERSION: `mypy --version`\"", "mypy --install-types --non-interactive {args}"]
+typing = ["echo \"VERSION: `mypy --version`\"", "mypy --install-types --non-interactive {args:.}"]
 
 
 [tool.pytest.ini_options]

@@ -99,33 +99,33 @@ jobs:
   #     - name: Perform CodeQL Analysis
   #       uses: github/codeql-action/analyze@v3
 
-  build-docs:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  # build-docs:
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.11"
 
-      - name: Install Hatch
-        run: pip install --upgrade hatch hatch-containers hatch-pip-compile
+  #     - name: Install Hatch
+  #       run: pip install --upgrade hatch hatch-containers hatch-pip-compile
 
-      - name: Build docs
-        run: hatch run docs:build
+  #     - name: Build docs
+  #       run: hatch run docs:build
 
-      - name: Save PR number
-        env:
-          PR_NUMBER: ${{ github.event.number }}
-        run: echo $PR_NUMBER > .pr_number
+  #     - name: Save PR number
+  #       env:
+  #         PR_NUMBER: ${{ github.event.number }}
+  #       run: echo $PR_NUMBER > .pr_number
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-preview
-          path: |
-            docs/_build/html
-            .pr_number
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: docs-preview
+  #         path: |
+  #           docs/_build/html
+  #           .pr_number
