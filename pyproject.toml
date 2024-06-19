@@ -164,6 +164,7 @@ extra-dependencies = [
   "types-decorator",
   "types-pyyaml",
   "types-docutils",
+  "types-Pygments",
 ]
 path = ".venv/"
 python = "3.11"
@@ -185,6 +186,7 @@ extra-dependencies = [
   "types-decorator",
   "types-pyyaml",
   "types-docutils",
+  "types-Pygments",
 ]
 python = "3.11"
 template = "local"
