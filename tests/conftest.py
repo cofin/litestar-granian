@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import operator
 import sys
 from pathlib import Path
 from shutil import rmtree
@@ -180,9 +181,9 @@ def _app_file_content(request: FixtureRequest) -> tuple[str, str]:  # pyright: i
 
 @pytest.fixture
 def app_file_content(_app_file_content: tuple[str, str]) -> str:
-    return _app_file_content[0]
+    return cast("str", operator.itemgetter(0)(_app_file_content))
 
 
 @pytest.fixture
 def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
-    return _app_file_content[1]
+    return cast("str", operator.itemgetter(1)(_app_file_content))
