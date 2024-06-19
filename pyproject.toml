@@ -159,6 +159,7 @@ extra-dependencies = [
   "ruff",
   "pylint",
   "pre-commit",
+  "types-setuptools",
   "types-click",
   "types-decorator",
   "types-pyyaml",
@@ -172,7 +173,6 @@ type = "virtual"
 
 # Lint environment
 [tool.hatch.envs.lint]
-detached = true
 extra-dependencies = [
   "pyyaml>=6",
   "anyio",
@@ -180,13 +180,14 @@ extra-dependencies = [
   "ruff",
   "pylint",
   "pre-commit",
+  "types-setuptools",
   "types-click",
   "types-decorator",
   "types-pyyaml",
   "types-docutils",
 ]
 python = "3.11"
-template = "docs"
+template = "local"
 type = "virtual"
 
 [tool.hatch.envs.lint.scripts]
