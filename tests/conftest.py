@@ -4,7 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Callable, Generator, Protocol, cast
 
 import pytest
 from click.testing import CliRunner
@@ -14,7 +14,10 @@ from litestar.cli._utils import (
 )
 
 if TYPE_CHECKING:
+    from unittest.mock import MagicMock
+
     from _pytest.fixtures import FixtureRequest
+    from pytest_mock import MockerFixture
 
 pytestmark = pytest.mark.anyio
 here = Path(__file__).parent
@@ -58,12 +61,20 @@ def reset_litestar_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LITESTAR_APP", raising=False)
 
 
-@pytest.fixture(autouse=True)
-def tmp_project_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    path = tmp_path / "project_dir"
-    path.mkdir(exist_ok=True)
-    monkeypatch.chdir(path)
-    return path
+@pytest.fixture
+def patch_autodiscovery_paths(request: FixtureRequest) -> Callable[[list[str]], None]:
+    def patcher(paths: list[str]) -> None:
+        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # noqa: PLC0415, PLC2701
+
+        old_paths = AUTODISCOVERY_FILE_NAMES[::]
+        AUTODISCOVERY_FILE_NAMES[:] = paths
+
+        def finalizer() -> None:
+            AUTODISCOVERY_FILE_NAMES[:] = old_paths
+
+        request.addfinalizer(finalizer)
+
+    return patcher
 
 
 class CreateAppFileFixture(Protocol):
@@ -89,6 +100,14 @@ def root_command() -> LitestarGroup:
     import litestar.cli.main  # noqa: PLC0415
 
     return cast("LitestarGroup", importlib.reload(litestar.cli.main).litestar_group)
+
+
+@pytest.fixture(autouse=True)
+def tmp_project_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    path = tmp_path / "project_dir"
+    path.mkdir(exist_ok=True)
+    monkeypatch.chdir(path)
+    return path
 
 
 @pytest.fixture
@@ -133,3 +152,37 @@ def app_file(create_app_file: CreateAppFileFixture) -> Path:
 @pytest.fixture
 def runner() -> CliRunner:
     return CliRunner()
+
+
+@pytest.fixture
+def mock_granian_worker(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch("granian._granian.ASGIWorker")
+
+
+@pytest.fixture()
+def mock_subprocess_run(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch("subprocess.run")
+
+
+@pytest.fixture
+def mock_confirm_ask(mocker: MockerFixture) -> Generator[MagicMock, None, None]:
+    yield mocker.patch("rich.prompt.Confirm.ask", return_value=True)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param((APP_DEFAULT_CONFIG_FILE_CONTENT, "app"), id="app_obj"),
+    ],
+)
+def _app_file_content(request: FixtureRequest) -> tuple[str, str]:  # pyright: ignore[reportUnusedFunction]
+    return cast("tuple[str, str]", request.param)
+
+
+@pytest.fixture
+def app_file_content(_app_file_content: tuple[str, str]) -> str:
+    return _app_file_content[0]
+
+
+@pytest.fixture
+def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
+    return _app_file_content[1]

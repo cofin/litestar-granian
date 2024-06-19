@@ -68,6 +68,7 @@ extra-dependencies = [
   "coverage[toml]>=6.2",
   "pytest",
   "pytest-cov",
+  "pytest-timeout",
   "pytest-mock",
   "pytest-sugar",
   "pytest-click",

@@ -15,7 +15,14 @@ if TYPE_CHECKING:
     from tests.conftest import CreateAppFileFixture
 
 
-def test_basic_command(runner: CliRunner, create_app_file: CreateAppFileFixture, root_command: LitestarGroup) -> None:
+@pytest.mark.parametrize("wc, reload", ((None, False), (None, True), (1, False), (1, True), (2, False), (2, True)))
+def test_basic_command(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    wc: int | None,
+    reload: bool,
+) -> None:
     app_file_content = textwrap.dedent(
         """
 from __future__ import annotations
@@ -29,30 +36,44 @@ from litestar import Controller, Litestar, get
 
 from litestar_granian import GranianPlugin
 
+
 async def dont_run_forever() -> None:
     async def _fn() -> None:
-        await asyncio.sleep(10)
+        await asyncio.sleep(1)
         os.kill(os.getpid(), signal.SIGTERM)
 
     asyncio.ensure_future(_fn())
 
+
 class SampleController(Controller):
     @get(path="/sample")
-    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
+    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301 
         return {"sample": "hello-world"}
 
 
-app = Litestar(plugins=[GranianPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever])
+app = Litestar(
+    plugins=[GranianPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever]
+)
     """,
     )
     app_file = create_app_file("command_test_app.py", content=app_file_content)
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run"])
+    extra_args: list[str] = []
+    if wc is not None:
+        extra_args.extend(["--wc", f"{wc!s}"])
+    if reload:
+        extra_args.append("--reload")
+    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
 
-    assert "_granian.asgi.serve - serve - Started worker-1" in result.output
+    assert "- _granian - server - Starting granian" in result.output
 
 
+@pytest.mark.parametrize(["wc", "reload"], [(None, False), (None, True), (1, False), (1, True), (2, False), (2, True)])
 def test_structlog_command(
-    runner: CliRunner, create_app_file: CreateAppFileFixture, root_command: LitestarGroup
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    wc: int | None,
+    reload: bool,
 ) -> None:
     app_file_content = textwrap.dedent(
         """
@@ -71,10 +92,11 @@ from litestar_granian import GranianPlugin
 
 async def dont_run_forever() -> None:
     async def _fn() -> None:
-        await asyncio.sleep(3)
+        await asyncio.sleep(1)
         os.kill(os.getpid(), signal.SIGTERM)
 
     asyncio.ensure_future(_fn())
+
 
 class SampleController(Controller):
     @get(path="/sample")
@@ -85,13 +107,16 @@ class SampleController(Controller):
 app = Litestar(
     plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever]
 )
-
     """,
     )
     app_file = create_app_file("command_test_app.py", content=app_file_content)
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run"])
-
-    assert "_granian.asgi.serve - serve - Started worker-1" in result.output
+    extra_args: list[str] = []
+    if wc is not None:
+        extra_args.extend(["--wc", f"{wc!s}"])
+    if reload:
+        extra_args.append("--reload")
+    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
+    assert "[INFO] Starting granian " in result.output
 
 
 # Error case tests
