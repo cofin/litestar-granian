@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import platform
 import sys
 from dataclasses import fields
 from pathlib import Path
@@ -259,6 +260,8 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
+    if platform.system() == "Darwin":
+        multiprocessing.set_start_method("fork", force=True)
 
     loops.get("auto")
     if debug:
