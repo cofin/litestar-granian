@@ -15,11 +15,22 @@ if TYPE_CHECKING:
     from tests.conftest import CreateAppFileFixture
 
 
-@pytest.mark.parametrize("wc, reload", ((None, False), (None, True), (1, False), (1, True), (2, False), (2, True)))
+@pytest.mark.parametrize(
+    "wc, reload, in_subprocess",
+    (
+        (None, False, False),
+        (None, True, False),
+        (1, False, False),
+        (1, True, False),
+        (2, False, False),
+        (2, True, False),
+    ),
+)
 def test_basic_command(
     runner: CliRunner,
     create_app_file: CreateAppFileFixture,
     root_command: LitestarGroup,
+    in_subprocess: bool,
     wc: int | None,
     reload: bool,
 ) -> None:
@@ -60,18 +71,35 @@ app = Litestar(
     extra_args: list[str] = []
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
+    if in_subprocess:
+        extra_args.extend(["--in-subprocess"])
+    else:
+        extra_args.extend(["--no-subprocess"])
     if reload:
         extra_args.append("--reload")
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
+    if in_subprocess:
+        assert "[INFO] Starting granian" in result.output
+    else:
+        assert "- _granian - server - Starting granian" in result.output
 
-    assert "- _granian - server - Starting granian" in result.output
 
-
-@pytest.mark.parametrize(["wc", "reload"], [(None, False), (None, True), (1, False), (1, True), (2, False), (2, True)])
+@pytest.mark.parametrize(
+    ["wc", "reload", "in_subprocess"],
+    [
+        (None, False, False),
+        (None, True, False),
+        (1, False, False),
+        (1, True, False),
+        (2, False, False),
+        (2, True, False),
+    ],
+)
 def test_structlog_command(
     runner: CliRunner,
     create_app_file: CreateAppFileFixture,
     root_command: LitestarGroup,
+    in_subprocess: bool,
     wc: int | None,
     reload: bool,
 ) -> None:
@@ -113,6 +141,10 @@ app = Litestar(
     extra_args: list[str] = []
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
+    if in_subprocess:
+        extra_args.extend(["--in-subprocess"])
+    else:
+        extra_args.extend(["--no-subprocess"])
     if reload:
         extra_args.append("--reload")
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])

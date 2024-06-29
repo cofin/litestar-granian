@@ -3,10 +3,11 @@ from __future__ import annotations
 import multiprocessing
 import os
 import platform
+import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 from click import Context, command, option
@@ -216,6 +217,14 @@ if TYPE_CHECKING:
     "--process-name",
     help="Set a custom name for processes (requires granian[pname] extra)",
 )
+@option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
+@option("--access-log-fmt", "log_access_fmt", help="Access log format")
+@option(
+    "--in-subprocess/--no-subprocess",
+    "in_subprocess",
+    default=True,
+    help="Launch Granian in a subprocess.",
+)
 def run_command(
     app: Litestar,
     reload: bool,
@@ -238,6 +247,8 @@ def run_command(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     http: HTTPModes,
+    log_access_enabled: bool,
+    log_access_fmt: str | None,
     opt: bool,
     backlog: int,
     backpressure: int | None,
@@ -250,6 +261,7 @@ def run_command(
     process_name: str | None,
     debug: bool,
     pdb: bool,
+    in_subprocess: bool,
     ctx: Context,
 ) -> None:  # sourcery skip: low-code-quality
     """Run a Litestar app.
@@ -260,6 +272,7 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
+    # this is currently required because the latest litestar uses a QueueListener logging handler
     if platform.system() == "Darwin":
         multiprocessing.set_start_method("fork", force=True)
 
@@ -281,7 +294,7 @@ def run_command(
     env: LitestarEnv = ctx.obj
     if env.is_app_factory:
         console.print(
-            r"granian does not support the app factory pattern.",
+            r"Granian does not support the app factory pattern.  Update your configuration to launch your application..",
         )
         sys.exit(1)
     threading_mode = threading_mode or ThreadModes.workers
@@ -295,38 +308,76 @@ def run_command(
         console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
         show_app_info(env.app)
     with _server_lifespan(env.app):
-        _run_granian(
-            env=env,
-            reload=reload,
-            port=port,
-            wc=workers,
-            threads=threads,
-            http=http,
-            opt=opt,
-            backlog=backlog,
-            backpressure=backpressure,
-            blocking_threads=blocking_threads,
-            respawn_failed_workers=respawn_failed_workers,
-            respawn_interval=respawn_interval,
-            http1_buffer_size=http1_buffer_size,
-            http1_keep_alive=http1_keep_alive,
-            http1_pipeline_flush=http1_pipeline_flush,
-            http2_adaptive_window=http2_adaptive_window,
-            http2_initial_connection_window_size=http2_initial_connection_window_size,
-            http2_initial_stream_window_size=http2_initial_stream_window_size,
-            http2_keep_alive_interval=http2_keep_alive_interval,
-            http2_keep_alive_timeout=http2_keep_alive_timeout,
-            http2_max_concurrent_streams=http2_max_concurrent_streams,
-            http2_max_frame_size=http2_max_frame_size,
-            http2_max_headers_size=http2_max_headers_size,
-            http2_max_send_buffer_size=http2_max_send_buffer_size,
-            threading_mode=threading_mode,
-            process_name=process_name,
-            ssl_keyfile=ssl_keyfile,
-            ssl_certificate=ssl_certificate,
-            url_path_prefix=url_path_prefix,
-            host=host,
-        )
+        if in_subprocess:
+            _run_granian_in_subprocess(
+                env=env,
+                reload=reload,
+                port=port,
+                wc=workers,
+                threads=threads,
+                http=http,
+                opt=opt,
+                backlog=backlog,
+                backpressure=backpressure,
+                blocking_threads=blocking_threads,
+                respawn_failed_workers=respawn_failed_workers,
+                respawn_interval=respawn_interval,
+                log_access_enabled=log_access_enabled,
+                log_access_fmt=log_access_fmt,
+                http1_buffer_size=http1_buffer_size,
+                http1_keep_alive=http1_keep_alive,
+                http1_pipeline_flush=http1_pipeline_flush,
+                http2_adaptive_window=http2_adaptive_window,
+                http2_initial_connection_window_size=http2_initial_connection_window_size,
+                http2_initial_stream_window_size=http2_initial_stream_window_size,
+                http2_keep_alive_interval=http2_keep_alive_interval,
+                http2_keep_alive_timeout=http2_keep_alive_timeout,
+                http2_max_concurrent_streams=http2_max_concurrent_streams,
+                http2_max_frame_size=http2_max_frame_size,
+                http2_max_headers_size=http2_max_headers_size,
+                http2_max_send_buffer_size=http2_max_send_buffer_size,
+                threading_mode=threading_mode,
+                process_name=process_name,
+                ssl_keyfile=ssl_keyfile,
+                ssl_certificate=ssl_certificate,
+                url_path_prefix=url_path_prefix,
+                host=host,
+            )
+        else:
+            _run_granian(
+                env=env,
+                reload=reload,
+                port=port,
+                wc=workers,
+                threads=threads,
+                http=http,
+                opt=opt,
+                backlog=backlog,
+                backpressure=backpressure,
+                blocking_threads=blocking_threads,
+                respawn_failed_workers=respawn_failed_workers,
+                respawn_interval=respawn_interval,
+                log_access_enabled=log_access_enabled,
+                log_access_fmt=log_access_fmt,
+                http1_buffer_size=http1_buffer_size,
+                http1_keep_alive=http1_keep_alive,
+                http1_pipeline_flush=http1_pipeline_flush,
+                http2_adaptive_window=http2_adaptive_window,
+                http2_initial_connection_window_size=http2_initial_connection_window_size,
+                http2_initial_stream_window_size=http2_initial_stream_window_size,
+                http2_keep_alive_interval=http2_keep_alive_interval,
+                http2_keep_alive_timeout=http2_keep_alive_timeout,
+                http2_max_concurrent_streams=http2_max_concurrent_streams,
+                http2_max_frame_size=http2_max_frame_size,
+                http2_max_headers_size=http2_max_headers_size,
+                http2_max_send_buffer_size=http2_max_send_buffer_size,
+                threading_mode=threading_mode,
+                process_name=process_name,
+                ssl_keyfile=ssl_keyfile,
+                ssl_certificate=ssl_certificate,
+                url_path_prefix=url_path_prefix,
+                host=host,
+            )
 
 
 def _run_granian(
@@ -343,6 +394,8 @@ def _run_granian(
     blocking_threads: int,
     respawn_failed_workers: bool,
     respawn_interval: float,
+    log_access_enabled: bool,
+    log_access_fmt: str | None,
     http1_buffer_size: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
@@ -426,11 +479,117 @@ def _run_granian(
         reload=reload,
         process_name=process_name,
         log_enabled=True,
+        log_access=log_access_enabled,
+        log_access_format=log_access_fmt,
         log_level=LogLevels.info,
         log_dictconfig=log_dictconfig,
     )
 
     try:
         server.serve()
-    except Exception as _:  # noqa: BLE001
-        raise click.exceptions.Exit(1)  # noqa: B904
+    except Exception as exc:
+        raise click.exceptions.Exit(1) from exc
+
+
+def _convert_granian_args(args: dict[str, Any]) -> list[str]:
+    process_args = []
+    for arg, value in args.items():
+        if isinstance(value, bool):
+            if value:
+                process_args.append(f"--{arg}")
+            else:
+                process_args.append(f"--no-{arg}")
+        elif isinstance(value, tuple):
+            process_args.extend(f"--{arg}={item}" for item in value)
+        else:
+            process_args.append(f"--{arg}={value}")
+
+    return process_args
+
+
+def _run_granian_in_subprocess(
+    *,
+    env: LitestarEnv,
+    host: str,
+    port: int,
+    reload: bool,
+    wc: int,
+    threads: int,
+    http: HTTPModes,
+    opt: bool,
+    backlog: int,
+    backpressure: int | None,
+    blocking_threads: int,
+    respawn_failed_workers: bool,
+    respawn_interval: float,
+    log_access_enabled: bool,
+    log_access_fmt: str | None,
+    http1_buffer_size: int,
+    http1_keep_alive: bool,
+    http1_pipeline_flush: bool,
+    http2_adaptive_window: bool,
+    http2_initial_connection_window_size: int,
+    http2_initial_stream_window_size: int,
+    http2_keep_alive_interval: int | None,
+    http2_keep_alive_timeout: int,
+    http2_max_concurrent_streams: int,
+    http2_max_frame_size: int,
+    http2_max_headers_size: int,
+    http2_max_send_buffer_size: int,
+    threading_mode: ThreadModes,
+    process_name: str | None,
+    ssl_keyfile: Path | None,
+    ssl_certificate: Path | None,
+    url_path_prefix: str | None,
+) -> None:
+    process_args: dict[str, Any] = {
+        "reload": reload,
+        "host": host,
+        "port": port,
+        "interface": Interfaces.ASGI.value,
+        "http": http.value,
+        "threads": threads,
+        "workers": wc,
+        "threading-mode": threading_mode.value,
+        "blocking-threads": blocking_threads,
+        "loop": Loops.auto.value,
+        "opt": opt,
+        "respawn-failed-workers": respawn_failed_workers,
+        "respawn-interval": respawn_interval,
+        "backlog": backlog,
+    }
+    if backpressure:
+        process_args["backpressure"] = backpressure
+    if log_access_enabled:
+        process_args["access-log"] = log_access_enabled
+    if log_access_fmt:
+        process_args["access-log-fmt"] = log_access_fmt
+    if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
+        process_args["http1-keep-alive"] = http1_keep_alive
+        process_args["http1-buffer-size"] = http1_buffer_size
+        process_args["http1-pipeline-flush"] = http1_pipeline_flush
+    if http.value == HTTPModes.http2.value:
+        process_args["http2-adaptive-window"] = http2_adaptive_window
+        process_args["http2-initial-connection-window-size"] = http2_initial_connection_window_size
+        process_args["http2-initial-stream-window-size"] = http2_initial_stream_window_size
+        if http2_keep_alive_interval is not None:
+            process_args["http2-keep-alive-interval"] = http2_keep_alive_interval
+        process_args["http2-keep-alive-timeout"] = http2_keep_alive_timeout
+        process_args["http2-max-concurrent-streams"] = http2_max_concurrent_streams
+        process_args["http2-max-frame-size"] = http2_max_frame_size
+        process_args["http2-max-headers-size"] = http2_max_headers_size
+        process_args["http2-max-send-buffer-size"] = http2_max_send_buffer_size
+        # websockets aren't supported in http2 only?
+        process_args["websockets"] = False
+    if url_path_prefix is not None:
+        process_args["url-path-prefix"] = url_path_prefix
+    if ssl_certificate is not None:
+        process_args["ssl-certfile"] = ssl_certificate
+    if ssl_keyfile is not None:
+        process_args["ssl-keyfile"] = ssl_keyfile
+    if process_name is not None:
+        process_args["process-name"] = process_name
+    subprocess.run(
+        [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
+        check=True,
+    )
