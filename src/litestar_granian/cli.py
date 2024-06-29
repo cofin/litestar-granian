@@ -3,7 +3,7 @@ from __future__ import annotations
 import multiprocessing
 import os
 import platform
-import subprocess
+import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
 from pathlib import Path
