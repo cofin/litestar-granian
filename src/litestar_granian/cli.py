@@ -222,7 +222,7 @@ if TYPE_CHECKING:
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
-    default=True,
+    default=False,
     help="Launch Granian in a subprocess.",
 )
 def run_command(
