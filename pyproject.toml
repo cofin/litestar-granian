@@ -151,16 +151,16 @@ build-check = ["build", "validate"]
 features = ["docs", "tests", "lint"]
 path = ".venv/"
 python = "3.11"
-template = "docs"
+template = "default"
 type = "virtual"
 
 
 # Lint environment
-[tool.hatch.envs.lint]
-detached = true
-features = ["lint"]
+[tool.hatch.envs.lint] 
+features = ["docs", "tests", "lint"]
 python = "3.11"
 type = "virtual"
+template = "default"
 
 [tool.hatch.envs.lint.scripts]
 check = ["style", "typing"]
