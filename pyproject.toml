@@ -156,7 +156,7 @@ type = "virtual"
 
 
 # Lint environment
-[tool.hatch.envs.lint] 
+[tool.hatch.envs.lint]
 features = ["docs", "tests", "lint"]
 python = "3.11"
 type = "virtual"
