@@ -5,17 +5,9 @@ from typing import TYPE_CHECKING
 
 from litestar.logging.config import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from litestar.plugins.structlog import StructlogPlugin
 
 from litestar_granian.cli import run_command
-
-try:
-    # this functionality only became available in litestar 2.6.
-    from litestar.plugins.structlog import StructlogPlugin
-except ImportError:  # pragma: nocover
-
-    class StructlogPlugin:  # type: ignore[no-redef] # pragma: nocover
-        """Fallback implementation for compatibility."""
-
 
 if TYPE_CHECKING:
     from click import Group
@@ -82,6 +74,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                     plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(
                         {"standard": {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"}},
                     )
-                plugin._config.structlog_logging_config.configure()  # type: ignore[union-attr]
+                if isinstance(plugin, StructlogPlugin) and hasattr(plugin, "_config"):
+                    plugin._config.structlog_logging_config.configure()
 
         return super().on_app_init(app_config)
