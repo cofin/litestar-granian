@@ -487,9 +487,10 @@ def _run_granian(
         log_dictconfig=log_dictconfig,
     )
     try:
+        server.setup_signals()  # type: ignore[no-untyped-call]
         server.serve()
     except KeyboardInterrupt:
-        sys.exit(1)
+        server.shutdown()  # type: ignore[no-untyped-call]
     except Exception:  # noqa: BLE001
         sys.exit(1)
     finally:
@@ -594,7 +595,10 @@ def _run_granian_in_subprocess(
         process_args["ssl-keyfile"] = ssl_keyfile
     if process_name is not None:
         process_args["process-name"] = process_name
-    subprocess.run(
-        [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
+            check=True,
+        )
+    finally:
+        console.print("[yellow]Granian process stopped.[/]")
