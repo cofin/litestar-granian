@@ -3,11 +3,7 @@ from __future__ import annotations
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
-from litestar.logging.config import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
-from litestar.plugins.structlog import StructlogPlugin
-
-from litestar_granian.cli import run_command
 
 if TYPE_CHECKING:
     from click import Group
@@ -24,9 +20,13 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
     def on_cli_init(self, cli: Group) -> None:  # noqa: PLR6301
         from litestar.cli.main import litestar_group as cli  # noqa: PLC0415
 
+        from litestar_granian.cli import run_command  # noqa: PLC0415
+
         cli.add_command(run_command)
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
+        from litestar.logging.config import LoggingConfig  # noqa: PLC0415
+
         if app_config.logging_config is not None and isinstance(app_config.logging_config, LoggingConfig):
             if app_config.logging_config.loggers.get("_granian", None) is None:
                 app_config.logging_config.loggers.update(
@@ -43,6 +43,8 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                 )
             app_config.logging_config.configure()
         if STRUCTLOG_INSTALLED:
+            from litestar.plugins.structlog import StructlogPlugin  # noqa: PLC0415
+
             for plugin in app_config.plugins:
                 if (
                     isinstance(plugin, StructlogPlugin)
