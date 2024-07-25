@@ -51,7 +51,6 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                 )
             app_config.logging_config.configure()
         if STRUCTLOG_INSTALLED:
-            # this functionality only became available in litestar 2.6.  This conditional checks for this.
             for plugin in app_config.plugins:
                 if (
                     isinstance(plugin, StructlogPlugin)
@@ -83,4 +82,6 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                     plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(
                         {"standard": {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"}},
                     )
+                plugin._config.structlog_logging_config.configure()  # type: ignore[union-attr]
+
         return super().on_app_init(app_config)
