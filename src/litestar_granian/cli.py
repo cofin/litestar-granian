@@ -491,6 +491,7 @@ def _run_granian(
         server.serve()
     except KeyboardInterrupt:
         server.shutdown()  # type: ignore[no-untyped-call]
+        sys.exit(1)
     except Exception:  # noqa: BLE001
         sys.exit(1)
     finally:
@@ -600,5 +601,7 @@ def _run_granian_in_subprocess(
             [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
             check=True,
         )
+    except KeyboardInterrupt:
+        sys.exit(1)
     finally:
         console.print("[yellow]Granian process stopped.[/]")
