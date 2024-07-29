@@ -113,7 +113,8 @@ import os
 import signal
 
 from litestar import Controller, Litestar, get
-from litestar.plugins.structlog import StructlogPlugin
+from litestar.logging import LoggingConfig, StructLoggingConfig
+from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
 
 from litestar_granian import GranianPlugin
 
@@ -133,8 +134,37 @@ class SampleController(Controller):
 
 
 app = Litestar(
-    plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever]
+    plugins=[
+        GranianPlugin(),
+        StructlogPlugin(
+            config=StructlogConfig(
+                structlog_logging_config=StructLoggingConfig(
+                    standard_lib_logging_config=LoggingConfig(
+                        root={
+                            "handlers": ["console"],
+                            "level": "INFO",
+                        },
+                        handlers={
+                            "console": {
+                                "class": "logging.StreamHandler",
+                                "level": "DEBUG",
+                                "formatter": "standard",
+                            },
+                            "queue_listener": {
+                                "class": "logging.StreamHandler",
+                                "level": "DEBUG",
+                                "formatter": "standard",
+                            },
+                        },
+                    )
+                )
+            )
+        ),
+    ],
+    route_handlers=[SampleController],
+    on_startup=[dont_run_forever],
 )
+
     """,
     )
     app_file = create_app_file("command_test_app.py", content=app_file_content)

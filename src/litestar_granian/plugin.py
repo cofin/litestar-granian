@@ -3,19 +3,7 @@ from __future__ import annotations
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
-from litestar.logging.config import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
-
-from litestar_granian.cli import run_command
-
-try:
-    # this functionality only became available in litestar 2.6.
-    from litestar.plugins.structlog import StructlogPlugin
-except ImportError:  # pragma: nocover
-
-    class StructlogPlugin:  # type: ignore[no-redef] # pragma: nocover
-        """Fallback implementation for compatibility."""
-
 
 if TYPE_CHECKING:
     from click import Group
@@ -32,9 +20,13 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
     def on_cli_init(self, cli: Group) -> None:  # noqa: PLR6301
         from litestar.cli.main import litestar_group as cli  # noqa: PLC0415
 
+        from litestar_granian.cli import run_command  # noqa: PLC0415
+
         cli.add_command(run_command)
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
+        from litestar.logging.config import LoggingConfig  # noqa: PLC0415
+
         if app_config.logging_config is not None and isinstance(app_config.logging_config, LoggingConfig):
             if app_config.logging_config.loggers.get("_granian", None) is None:
                 app_config.logging_config.loggers.update(
@@ -51,7 +43,8 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                 )
             app_config.logging_config.configure()
         if STRUCTLOG_INSTALLED:
-            # this functionality only became available in litestar 2.6.  This conditional checks for this.
+            from litestar.plugins.structlog import StructlogPlugin  # noqa: PLC0415
+
             for plugin in app_config.plugins:
                 if (
                     isinstance(plugin, StructlogPlugin)
@@ -83,4 +76,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                     plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(
                         {"standard": {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"}},
                     )
+                if isinstance(plugin, StructlogPlugin) and hasattr(plugin, "_config"):
+                    plugin._config.structlog_logging_config.configure()
+
         return super().on_app_init(app_config)

@@ -224,6 +224,7 @@ if TYPE_CHECKING:
     "in_subprocess",
     default=True,
     help="Launch Granian in a subprocess.",
+    envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
 def run_command(
     app: Litestar,
@@ -282,6 +283,7 @@ def run_command(
         os.environ["LITESTAR_DEBUG"] = "1"
     if pdb:
         os.environ["LITESTAR_PDB"] = "1"
+    os.environ["LITESTAR_PORT"] = str(port)
     quiet_console = os.getenv("LITESTAR_QUIET_CONSOLE") or False
     if callable(ctx.obj):
         ctx.obj = ctx.obj()
@@ -484,11 +486,16 @@ def _run_granian(
         log_level=LogLevels.info,
         log_dictconfig=log_dictconfig,
     )
-
     try:
+        server.setup_signals()  # type: ignore[no-untyped-call]
         server.serve()
-    except Exception as exc:
-        raise click.exceptions.Exit(1) from exc
+    except KeyboardInterrupt:
+        server.shutdown()  # type: ignore[no-untyped-call]
+        sys.exit(1)
+    except Exception:  # noqa: BLE001
+        sys.exit(1)
+    finally:
+        console.print("[yellow]Granian process stopped.[/]")
 
 
 def _convert_granian_args(args: dict[str, Any]) -> list[str]:
@@ -589,7 +596,14 @@ def _run_granian_in_subprocess(
         process_args["ssl-keyfile"] = ssl_keyfile
     if process_name is not None:
         process_args["process-name"] = process_name
-    subprocess.run(
-        [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
+            check=True,
+        )
+    except KeyboardInterrupt:
+        sys.exit(1)
+    except Exception:  # noqa: BLE001
+        sys.exit(1)
+    finally:
+        console.print("[yellow]Granian process stopped.[/]")
