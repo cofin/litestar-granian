@@ -603,5 +603,7 @@ def _run_granian_in_subprocess(
         )
     except KeyboardInterrupt:
         sys.exit(1)
+    except Exception:  # noqa: BLE001
+        sys.exit(1)
     finally:
         console.print("[yellow]Granian process stopped.[/]")
