@@ -274,7 +274,7 @@ def run_command(
     instance.
     """
     # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() in {"Darwin", "Windows"}:
+    if platform.system() == "Darwin":
         multiprocessing.set_start_method("fork", force=True)
 
     loops.get("auto")
