@@ -131,6 +131,8 @@ class SampleController(Controller):
     async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
         return {"sample": "hello-world"}
 
+plugin = StructlogPlugin()
+plugin._config.structlog_logging_config.configure()
 
 app = Litestar(
     plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever]
