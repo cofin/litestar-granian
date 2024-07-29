@@ -140,6 +140,10 @@ app = Litestar(
             config=StructlogConfig(
                 structlog_logging_config=StructLoggingConfig(
                     standard_lib_logging_config=LoggingConfig(
+                        root={
+                            "handlers": ["console"],
+                            "level": "INFO",
+                        },
                         handlers={
                             "console": {
                                 "class": "logging.StreamHandler",
@@ -151,7 +155,7 @@ app = Litestar(
                                 "level": "DEBUG",
                                 "formatter": "standard",
                             },
-                        }
+                        },
                     )
                 )
             )
@@ -160,6 +164,7 @@ app = Litestar(
     route_handlers=[SampleController],
     on_startup=[dont_run_forever],
 )
+
     """,
     )
     app_file = create_app_file("command_test_app.py", content=app_file_content)
