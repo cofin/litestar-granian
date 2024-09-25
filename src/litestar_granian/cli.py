@@ -37,7 +37,7 @@ except ImportError:  # pragma: nocover
 
         This is a convenience wrapper around the built in system methods.  This allows for easier testing of TTY/non-TTY modes.
         """
-        return sys.stdout.isatty()
+        return sys.stdout.isatty()  # noqa: DOC201
 
 
 if TYPE_CHECKING:
