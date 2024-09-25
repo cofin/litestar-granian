@@ -213,11 +213,6 @@ if TYPE_CHECKING:
     help="The maximum amount of time in seconds a worker will be kept alive before respawn",
 )
 @option(
-    "--factory/--no-factory",
-    default=False,
-    help="Treat target as a factory function, that should be invoked to build the actual target",
-)
-@option(
     "-r",
     "--reload/--no-reload",
     help="Enable auto reload on application's files changes (requires granian[reload] extra)",
@@ -639,8 +634,9 @@ def _run_granian_in_subprocess(
         "respawn-failed-workers": respawn_failed_workers,
         "respawn-interval": respawn_interval,
         "backlog": backlog,
-        "factory": env.is_app_factory,
     }
+    if env.is_app_factory:
+        process_args["factory"] = env.is_app_factory
     if reload_paths:
         process_args["reload-paths"] = (Path(d).absolute for d in reload_paths)
     if reload_ignore_dirs:
