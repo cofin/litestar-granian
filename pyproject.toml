@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.7.0",
-  "granian[all]>=1.3.0",
+  "granian[all]>=1.6.0",
   "fast-query-parsers",
   "httptools",
   "uvloop; sys_platform != 'win32'",
@@ -37,7 +37,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.5.1"
+version = "0.6.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -70,7 +70,18 @@ python = "3.12"
 
 # Test environment with test-only dependencies
 [tool.hatch.envs.test]
-features = ["docs", "tests"]
+extra-dependencies = [
+  "structlog",
+  "anyio",
+  "coverage[toml]",
+  "pytest",
+  "pytest-timeout",
+  "pytest-cov",
+  "pytest-mock",
+  "pytest-sugar",
+  "pytest-click",
+  "pytest-xdist",
+]
 template = "default"
 type = "virtual"
 
@@ -113,6 +124,9 @@ extra-dependencies = [
   "types-pyyaml",
   "types-docutils",
   "types-Pygments",
+  "types-Pillow",
+  "types-colorama",
+  "types-pytz",
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
@@ -163,6 +177,9 @@ extra-dependencies = [
   "types-pyyaml",
   "types-docutils",
   "types-Pygments",
+  "types-Pillow",
+  "types-colorama",
+  "types-pytz",
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
@@ -203,6 +220,9 @@ extra-dependencies = [
   "types-pyyaml",
   "types-docutils",
   "types-Pygments",
+  "types-Pillow",
+  "types-colorama",
+  "types-pytz",
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
