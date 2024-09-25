@@ -36,8 +36,11 @@ except ImportError:  # pragma: nocover
         This was added in Litestar 2.8 and is back-ported for compatibility.
 
         This is a convenience wrapper around the built in system methods.  This allows for easier testing of TTY/non-TTY modes.
+
+        Returns:
+            bool - True of the terminal is TTY enabled
         """
-        return sys.stdout.isatty()  # noqa: DOC201
+        return sys.stdout.isatty()
 
 
 if TYPE_CHECKING:
