@@ -14,6 +14,7 @@ from click import Context, command, option
 from granian import Granian
 from granian._loops import loops  # noqa: PLC2701
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
+from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
 from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
 
 
 @command(name="run", context_settings={"show_default": True}, help="Start application server")
+@option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
 @option(
     "-W",
@@ -88,7 +90,6 @@ if TYPE_CHECKING:
     default=None,
     help="Maximum number of requests to process concurrently (per worker)",
 )
-@option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option(
     "--ssl-keyfile",
     type=click.Path(file_okay=True, exists=True, dir_okay=False, readable=True),
@@ -207,6 +208,16 @@ if TYPE_CHECKING:
     help="The number of seconds to sleep between workers respawn",
 )
 @option(
+    "--workers-lifetime",
+    type=click.IntRange(60),
+    help="The maximum amount of time in seconds a worker will be kept alive before respawn",
+)
+@option(
+    "--factory/--no-factory",
+    default=False,
+    help="Treat target as a factory function, that should be invoked to build the actual target",
+)
+@option(
     "-r",
     "--reload/--no-reload",
     help="Enable auto reload on application's files changes (requires granian[reload] extra)",
@@ -214,8 +225,42 @@ if TYPE_CHECKING:
     is_flag=True,
 )
 @option(
+    "--reload-paths",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),
+    help="Paths to watch for changes",
+    show_default="Working directory",
+    multiple=True,
+)
+@option(
+    "--reload-ignore-dirs",
+    help=(
+        "Names of directories to ignore changes for. "
+        "Extends the default list of directories to ignore in watchfiles' default filter"
+    ),
+    multiple=True,
+)
+@option(
+    "--reload-ignore-patterns",
+    help=(
+        "File/directory name patterns (regex) to ignore changes for. "
+        "Extends the default list of patterns to ignore in watchfiles' default filter"
+    ),
+    multiple=True,
+)
+@option(
+    "--reload-ignore-paths",
+    type=click.Path(exists=False, path_type=Path),
+    help="Absolute paths to ignore changes for",
+    multiple=True,
+)
+@option(
     "--process-name",
     help="Set a custom name for processes (requires granian[pname] extra)",
+)
+@option(
+    "--pid-file",
+    type=click.Path(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),
+    help="A path to write the PID file to",
 )
 @option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
 @option("--access-log-fmt", "log_access_fmt", help="Access log format")
@@ -229,12 +274,18 @@ if TYPE_CHECKING:
 def run_command(
     app: Litestar,
     reload: bool,
+    reload_paths: list[Path] | None,
+    reload_ignore_dirs: list[str] | None,
+    reload_ignore_patterns: list[str] | None,
+    reload_ignore_paths: list[Path] | None,
+    host: str,
     port: int,
     wc: int,
     threads: int,
     blocking_threads: int,
     respawn_failed_workers: bool,
     respawn_interval: float,
+    workers_lifetime: int | None,
     http1_keep_alive: bool,
     http1_buffer_size: int,
     http1_pipeline_flush: bool,
@@ -258,8 +309,8 @@ def run_command(
     ssl_certificate: Path | None,
     create_self_signed_cert: bool,
     url_path_prefix: str | None,
-    host: str,
     process_name: str | None,
+    pid_file: Path | None,
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
@@ -294,11 +345,6 @@ def run_command(
             ctx.obj.app.pdb_on_exception = True
 
     env: LitestarEnv = ctx.obj
-    if env.is_app_factory:
-        console.print(
-            r"Granian does not support the app factory pattern.  Update your configuration to launch your application..",
-        )
-        sys.exit(1)
     threading_mode = threading_mode or ThreadModes.workers
     workers = wc
     if create_self_signed_cert:
@@ -314,8 +360,13 @@ def run_command(
             _run_granian_in_subprocess(
                 env=env,
                 reload=reload,
+                reload_paths=reload_paths,
+                reload_ignore_dirs=reload_ignore_dirs,
+                reload_ignore_patterns=reload_ignore_patterns,
+                reload_ignore_paths=reload_ignore_paths,
                 port=port,
                 wc=workers,
+                workers_lifetime=workers_lifetime,
                 threads=threads,
                 http=http,
                 opt=opt,
@@ -340,6 +391,7 @@ def run_command(
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
                 threading_mode=threading_mode,
                 process_name=process_name,
+                pid_file=pid_file,
                 ssl_keyfile=ssl_keyfile,
                 ssl_certificate=ssl_certificate,
                 url_path_prefix=url_path_prefix,
@@ -349,8 +401,13 @@ def run_command(
             _run_granian(
                 env=env,
                 reload=reload,
+                reload_paths=reload_paths,
+                reload_ignore_dirs=reload_ignore_dirs,
+                reload_ignore_patterns=reload_ignore_patterns,
+                reload_ignore_paths=reload_ignore_paths,
                 port=port,
                 wc=workers,
+                workers_lifetime=workers_lifetime,
                 threads=threads,
                 http=http,
                 opt=opt,
@@ -375,6 +432,7 @@ def run_command(
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
                 threading_mode=threading_mode,
                 process_name=process_name,
+                pid_file=pid_file,
                 ssl_keyfile=ssl_keyfile,
                 ssl_certificate=ssl_certificate,
                 url_path_prefix=url_path_prefix,
@@ -386,7 +444,6 @@ def _run_granian(
     env: LitestarEnv,
     host: str,
     port: int,
-    reload: bool,
     wc: int,
     threads: int,
     http: HTTPModes,
@@ -411,7 +468,14 @@ def _run_granian(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     threading_mode: ThreadModes,
+    workers_lifetime: int | None,
+    reload: bool,
+    reload_paths: list[Path] | None,
+    reload_ignore_dirs: list[str] | None,
+    reload_ignore_patterns: list[str] | None,
+    reload_ignore_paths: list[Path] | None,
     process_name: str | None,
+    pid_file: Path | None,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
@@ -458,10 +522,12 @@ def _run_granian(
 
     server = Granian(
         env.app_path,
+        factory=env.is_app_factory,
         address=host,
         port=port,
         interface=Interfaces.ASGI,
         workers=wc,
+        workers_lifetime=workers_lifetime,
         threads=threads,
         blocking_threads=blocking_threads,
         threading_mode=threading_mode,
@@ -479,7 +545,12 @@ def _run_granian(
         respawn_failed_workers=respawn_failed_workers,
         respawn_interval=respawn_interval,
         reload=reload,
+        reload_paths=reload_paths,
+        reload_ignore_dirs=reload_ignore_dirs,
+        reload_ignore_patterns=reload_ignore_patterns,
+        reload_ignore_paths=reload_ignore_paths,
         process_name=process_name,
+        pid_file=pid_file,
         log_enabled=True,
         log_access=log_access_enabled,
         log_access_format=log_access_fmt,
@@ -487,12 +558,10 @@ def _run_granian(
         log_dictconfig=log_dictconfig,
     )
     try:
-        server.setup_signals()  # type: ignore[no-untyped-call]
         server.serve()
     except KeyboardInterrupt:
         server.shutdown()  # type: ignore[no-untyped-call]
-        sys.exit(1)
-    except Exception:  # noqa: BLE001
+    except FatalError:
         sys.exit(1)
     finally:
         console.print("[yellow]Granian process stopped.[/]")
@@ -506,7 +575,7 @@ def _convert_granian_args(args: dict[str, Any]) -> list[str]:
                 process_args.append(f"--{arg}")
             else:
                 process_args.append(f"--no-{arg}")
-        elif isinstance(value, tuple):
+        elif isinstance(value, (tuple, list)):
             process_args.extend(f"--{arg}={item}" for item in value)
         else:
             process_args.append(f"--{arg}={value}")
@@ -519,7 +588,6 @@ def _run_granian_in_subprocess(
     env: LitestarEnv,
     host: str,
     port: int,
-    reload: bool,
     wc: int,
     threads: int,
     http: HTTPModes,
@@ -544,7 +612,14 @@ def _run_granian_in_subprocess(
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
     threading_mode: ThreadModes,
+    workers_lifetime: int | None,
+    reload: bool,
+    reload_paths: list[Path] | None,
+    reload_ignore_dirs: list[str] | None,
+    reload_ignore_patterns: list[str] | None,
+    reload_ignore_paths: list[Path] | None,
     process_name: str | None,
+    pid_file: Path | None,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
     url_path_prefix: str | None,
@@ -564,9 +639,20 @@ def _run_granian_in_subprocess(
         "respawn-failed-workers": respawn_failed_workers,
         "respawn-interval": respawn_interval,
         "backlog": backlog,
+        "factory": env.is_app_factory,
     }
+    if reload_paths:
+        process_args["reload-paths"] = (Path(d).absolute for d in reload_paths)
+    if reload_ignore_dirs:
+        process_args["reload-ignore-dirs"] = reload_ignore_dirs
+    if reload_ignore_patterns:
+        process_args["reload-ignore-patterns"] = reload_ignore_patterns
+    if reload_ignore_paths:
+        process_args["reload-ignore-paths"] = (Path(d).absolute for d in reload_ignore_paths)
     if backpressure:
         process_args["backpressure"] = backpressure
+    if workers_lifetime:
+        process_args["workers-lifetime"] = workers_lifetime
     if log_access_enabled:
         process_args["access-log"] = log_access_enabled
     if log_access_fmt:
@@ -596,6 +682,8 @@ def _run_granian_in_subprocess(
         process_args["ssl-keyfile"] = ssl_keyfile
     if process_name is not None:
         process_args["process-name"] = process_name
+    if pid_file is not None:
+        process_args["pid-file"] = Path(pid_file).absolute
     try:
         subprocess.run(
             [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
@@ -603,7 +691,7 @@ def _run_granian_in_subprocess(
         )
     except KeyboardInterrupt:
         sys.exit(1)
-    except Exception:  # noqa: BLE001
+    except FatalError:
         sys.exit(1)
     finally:
         console.print("[yellow]Granian process stopped.[/]")
