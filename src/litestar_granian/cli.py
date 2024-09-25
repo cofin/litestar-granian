@@ -224,7 +224,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--reload-paths",
-    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
     help="Paths to watch for changes",
     show_default="Working directory",
     multiple=True,
@@ -247,7 +247,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--reload-ignore-paths",
-    type=click.Path(exists=False, path_type=Path),
+    type=click.Path(exists=False, path_type=Path),  # type: ignore[type-var]
     help="Absolute paths to ignore changes for",
     multiple=True,
 )
@@ -257,7 +257,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--pid-file",
-    type=click.Path(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),
+    type=click.Path(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),  # type: ignore[type-var]
     help="A path to write the PID file to",
 )
 @option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
