@@ -70,7 +70,18 @@ python = "3.12"
 
 # Test environment with test-only dependencies
 [tool.hatch.envs.test]
-features = ["docs", "tests"]
+extra-dependencies = [
+  "structlog",
+  "anyio",
+  "coverage[toml]",
+  "pytest",
+  "pytest-timeout",
+  "pytest-cov",
+  "pytest-mock",
+  "pytest-sugar",
+  "pytest-click",
+  "pytest-xdist",
+]
 template = "default"
 type = "virtual"
 
