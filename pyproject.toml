@@ -103,6 +103,9 @@ dev-dependencies = [
   "pytest-xdist",
 ]
 
+#####################
+#    Testing        #
+#####################
 [tool.pytest.ini_options]
 addopts = "-ra -q --doctest-glob='*.md'"
 filterwarnings = [
@@ -144,22 +147,9 @@ omit = ["litestar_granian/__metadata__.py", "tests/*", "scripts/*"]
 parallel = true
 
 
-[tool.black]
-exclude = '''
-/(
-    \.git
-  | \.mypy_cache
-  | \.tox
-  | venv
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-include = '\.pyi?$'
-line-length = 120
+#####################
+# Tools             #
+#####################
 
 [tool.ruff]
 exclude = [
@@ -262,8 +252,8 @@ lint.select = ["ALL"]
 # Allow unused variables when underscore-prefixed.
 lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 preview = true                                                    # preview features & checks, use with caution
-src = ["src", "tests/", "docs/"]
-target-version = "py38"
+src = ["litestar_granian","tools","example", "tests/", "docs/"]
+target-version = "py39"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -318,6 +308,7 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 warn_unused_ignores = true
+packages = "litestar_granian,tests,examples,docs"
 
 [[tool.mypy.overrides]]
 disable_error_code = "attr-defined"

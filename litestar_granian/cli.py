@@ -13,7 +13,7 @@ try:
     from rich_click import Context, IntRange, command, option
     from rich_click import Path as ClickPath
 except ImportError:
-    from click import Context, IntRange, command, option
+    from click import Context, IntRange, command, option  # type: ignore[no-redef]
     from click import Path as ClickPath
 from granian import Granian
 from granian._loops import loops  # noqa: PLC2701

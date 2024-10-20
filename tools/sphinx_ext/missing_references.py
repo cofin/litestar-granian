@@ -75,7 +75,7 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
     # to suppress specific warnings
     source_line = get_source_line(node)[0]
     source = source_line.split(" ")[-1]
-    if target in ignore_refs.get(source, []):
+    if target in ignore_refs.get(source, []):  # type: ignore[operator]
         return True
     ignore_ref_rgs = {rg: targets for rg, targets in ignore_refs.items() if isinstance(rg, re.Pattern)}
     for pattern, targets in ignore_ref_rgs.items():

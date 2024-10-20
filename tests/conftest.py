@@ -5,7 +5,7 @@ import operator
 import sys
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, Callable, Generator, Protocol, cast
+from typing import TYPE_CHECKING, Callable, Protocol, cast
 
 import pytest
 from click.testing import CliRunner
@@ -15,6 +15,7 @@ from litestar.cli._utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from unittest.mock import MagicMock
 
     from _pytest.fixtures import FixtureRequest
