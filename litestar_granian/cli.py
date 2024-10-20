@@ -444,7 +444,7 @@ def run_command(
 
 def _set_multiprocessing_start_method() -> None:
     # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() in {"Darwin", "Windows"}:
+    if platform.system() in {"Darwin"}:
         multiprocessing.set_start_method("fork", force=True)
 
 def _run_granian(
