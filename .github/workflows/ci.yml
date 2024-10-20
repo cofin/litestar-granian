@@ -92,9 +92,6 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -111,36 +108,36 @@ jobs:
       - name: Test
         run: uv run pytest -m ""
 
-  # build-docs:
-  #   needs:
-  #     - validate
-  #   if: github.event_name == 'pull_request'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check out repository
-  #       uses: actions/checkout@v4
+  build-docs:
+    needs:
+      - validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-  #     - name: Set up Python
-  #       run: uv python install 3.12
+      - name: Set up Python
+        run: uv python install 3.12
 
-  #     - name: Install dependencies
-  #       run: uv sync --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
 
-  #     - name: Build docs
-  #       run: uv run make docs
+      - name: Build docs
+        run: uv run make docs
 
-  #     - name: Save PR number
-  #       run: |
-  #         echo "${{ github.event.number }}" > .pr_number
+      - name: Save PR number
+        run: |
+          echo "${{ github.event.number }}" > .pr_number
 
-  #     - name: Upload artifact
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: docs-preview
-  #         path: |
-  #           docs/_build/html
-  #           .pr_number
-  #         include-hidden-files: true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-preview
+          path: |
+            docs/_build/html
+            .pr_number
+          include-hidden-files: true

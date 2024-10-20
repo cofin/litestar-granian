@@ -39,7 +39,7 @@ jobs:
         with:
           folder: docs-preview/docs/_build/html
           token: ${{ secrets.DOCS_PREVIEW_DEPLOY_KEY }}
-          repository-name: litestar-org/litestar-granian-docs-preview
+          repository-name: cofin/litestar-granian-docs-preview
           clean: false
           target-folder: ${{ env.PR_NUMBER }}
           branch: gh-pages
