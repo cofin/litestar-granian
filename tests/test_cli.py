@@ -72,7 +72,7 @@ app = Litestar(
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
     if reload:
-        extra_args.extend(["--reload","--in-subprocess"])
+        extra_args.extend(["--reload", "--in-subprocess"])
     elif in_subprocess:
         extra_args.extend(["--in-subprocess"])
     else:
@@ -172,7 +172,7 @@ app = Litestar(
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
     if reload:
-        extra_args.extend(["--reload","--in-subprocess"])
+        extra_args.extend(["--reload", "--in-subprocess"])
     elif in_subprocess:
         extra_args.extend(["--in-subprocess"])
     else:

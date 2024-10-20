@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 @cache
 def _get_module_ast(source_file: str) -> ast.AST | ast.Module:
-    return ast.parse(Path(source_file).read_text())
+    return ast.parse(Path(source_file).read_text(encoding="utf-8"))
 
 
 def _get_import_nodes(nodes: list[ast.stmt]) -> Generator[ast.Import | ast.ImportFrom, None, None]:
@@ -43,7 +43,7 @@ def get_module_global_imports(module_import_path: str, reference_target_source_o
     obj = getattr(module, reference_target_source_obj)
     tree = _get_module_ast(inspect.getsourcefile(obj))
 
-    import_nodes = _get_import_nodes(tree.body) # type: ignore[attr-defined]
+    import_nodes = _get_import_nodes(tree.body)  # type: ignore[attr-defined]
     return {path.asname or path.name for import_node in import_nodes for path in import_node.names}
 
 
@@ -83,7 +83,7 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
             continue
         if isinstance(targets, set) and target in targets:
             return True
-        if targets.match(target): # pyright: ignore[reportAttributeAccessIssue]
+        if targets.match(target):  # pyright: ignore[reportAttributeAccessIssue]
             return True
 
     return None
@@ -110,7 +110,7 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
 def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[str]) -> None:
     tmp_examples_path = Path.cwd() / "docs/_build/_tmp_examples"
     tmp_examples_path.mkdir(exist_ok=True, parents=True)
-    env.tmp_examples_path = tmp_examples_path # pyright: ignore[reportAttributeAccessIssue]
+    env.tmp_examples_path = tmp_examples_path  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def setup(app: Sphinx) -> dict[str, bool]:

@@ -25,7 +25,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
 
         from litestar_granian.cli import run_command  # noqa: PLC0415
 
-        cli.add_command(run_command) # pyright: ignore[reportArgumentType]
+        cli.add_command(run_command)  # pyright: ignore[reportArgumentType]
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         from litestar.logging.config import LoggingConfig  # noqa: PLC0415

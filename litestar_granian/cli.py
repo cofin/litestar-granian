@@ -8,10 +8,13 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
 try:
-    from rich_click import Context, command, option, IntRange, Path as ClickPath
+    from rich_click import Context, IntRange, command, option
+    from rich_click import Path as ClickPath
 except ImportError:
-    from click import Context, command, option, IntRange, Path as ClickPath
+    from click import Context, IntRange, command, option
+    from click import Path as ClickPath
 from granian import Granian
 from granian._loops import loops  # noqa: PLC2701
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
@@ -324,7 +327,7 @@ def run_command(
     instance.
     """
     # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() in ("Darwin", "Windows"):
+    if platform.system() in {"Darwin", "Windows"}:
         multiprocessing.set_start_method("fork", force=True)
 
     loops.get("auto")

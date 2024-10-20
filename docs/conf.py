@@ -32,7 +32,7 @@ extensions = [
 ]
 
 intersphinx_mapping = {
-"python": ("https://docs.python.org/3", None),
+    "python": ("https://docs.python.org/3", None),
     "msgspec": ("https://jcristharif.com/msgspec/", None),
     "anyio": ("https://anyio.readthedocs.io/en/stable/", None),
     "click": ("https://click.palletsprojects.com/en/8.1.x/", None),
@@ -54,7 +54,6 @@ nitpick_ignore = [
     (PY_CLASS, "config.app.AppConfig"),
     (PY_CLASS, "UserDefinedType"),
     (PY_METH, "type_engine"),
-
     # type vars and aliases / intentionally undocumented
     (PY_CLASS, "CollectionT"),
     (PY_CLASS, "EmptyType"),

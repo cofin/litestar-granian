@@ -278,7 +278,8 @@ ban-relative-imports = "all"
 # Allow print/pprint
 "__init__.py" = ['F401', 'D104']
 "__main__.py" = ["E402"]
-"docs/*" = ["S404", "INP001","PLW0127","A001"]
+"docs/*" = ["S404", "INP001","PLW0127","A001","ERA001","F811"]
+"tools/*" = ["S404"]
 "examples/*" = ["T201","DOC201"]
 # Tests can use magic values, assertions, and relative imports
 "tests/**/*" = [

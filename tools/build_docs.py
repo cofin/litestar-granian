@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Generator
 import importlib.metadata
 import json
 import os
 import shutil
 import subprocess
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 REDIRECT_TEMPLATE = """
 <!DOCTYPE HTML>
@@ -38,15 +41,15 @@ class VersionSpec(TypedDict):
 
 @contextmanager
 def checkout(branch: str) -> Generator[None]:
-    subprocess.run(["git", "checkout", branch], check=True)  # noqa: S603 S607
+    subprocess.run(["git", "checkout", branch], check=True)  # noqa: S607
     yield
-    subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S603 S607
+    subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S607
 
 
 def load_version_spec() -> VersionSpec:
     versions_file = Path("docs/_static/versions.json")
     if versions_file.exists():
-        return cast("VersionSpec",  json.loads(versions_file.read_text()))
+        return cast("VersionSpec", json.loads(versions_file.read_text()))
     return {"versions": [], "latest": ""}
 
 
@@ -56,7 +59,7 @@ def build(output_dir: str, version: str | None) -> None:
     else:
         os.environ["_LITESTAR_GRANIAN_DOCS_BUILD_VERSION"] = version
 
-    subprocess.run(["make", "docs"], check=True)  # noqa: S603 S607
+    subprocess.run(["make", "docs"], check=True)  # noqa: S607
 
     Path(output_dir).mkdir()
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)

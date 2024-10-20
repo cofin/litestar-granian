@@ -27,7 +27,7 @@ class ChangeDirective(SphinxDirective):
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec: ClassVar[dict[str, Any]] = { # pyright: ignore[reportIncompatibleVariableOverride]
+    option_spec: ClassVar[dict[str, Any]] = {  # pyright: ignore[reportIncompatibleVariableOverride]
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
