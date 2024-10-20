@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
 
+__all__ = ("on_missing_reference", "setup")
+
 
 def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: Element) -> Any:
     if not hasattr(node, "attributes"):

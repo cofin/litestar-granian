@@ -8,6 +8,8 @@ from litestar import Controller, Litestar, get
 
 from litestar_granian import GranianPlugin
 
+__all__ = ("SampleController", "dont_run_forever")
+
 
 async def dont_run_forever() -> None:
     await anyio.sleep(5)

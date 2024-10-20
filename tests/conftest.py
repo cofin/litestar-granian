@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import operator
+import os
 import sys
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, Callable, Generator, Protocol, cast
+from typing import TYPE_CHECKING, Callable, Protocol, cast
 
 import pytest
 from click.testing import CliRunner
@@ -14,7 +15,10 @@ from litestar.cli._utils import (
     _path_to_dotted_path,  # noqa: PLC2701
 )
 
+from litestar_granian import cli
+
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from unittest.mock import MagicMock
 
     from _pytest.fixtures import FixtureRequest
@@ -187,3 +191,14 @@ def app_file_content(_app_file_content: tuple[str, str]) -> str:
 @pytest.fixture
 def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
     return cast("str", operator.itemgetter(1)(_app_file_content))
+
+
+def _no_op() -> None:
+    return None
+
+
+@pytest.fixture(autouse=True)
+def mock_multiprocessing_set(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "win32":
+        monkeypatch.setattr(cli, "_set_multiprocessing_start_method", _no_op)
+    yield

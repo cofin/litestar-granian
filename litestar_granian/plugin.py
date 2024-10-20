@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
 if TYPE_CHECKING:
-    from click import Group
+    try:
+        from rich_click import Group
+    except ImportError:
+        from click import Group
     from litestar.config.app import AppConfig
 
 STRUCTLOG_INSTALLED = find_spec("structlog") is not None
@@ -22,7 +25,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
 
         from litestar_granian.cli import run_command  # noqa: PLC0415
 
-        cli.add_command(run_command)
+        cli.add_command(run_command)  # pyright: ignore[reportArgumentType]
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
         from litestar.logging.config import LoggingConfig  # noqa: PLC0415

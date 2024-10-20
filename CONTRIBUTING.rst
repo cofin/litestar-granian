@@ -4,12 +4,8 @@ Contribution guide
 Setting up the environment
 --------------------------
 
-1. Install `PDM <https://pdm.fming.dev/latest/>`_
-2. Run ``pdm install -G:all`` to create a `virtual environment <https://docs.python.org/3/tutorial/venv.html>`_ and install
-   the dependencies
-3. If you're working on the documentation and need to build it locally, install the extra dependencies with ``pdm install -G:docs``
-4. Install `pre-commit <https://pre-commit.com/>`_
-5. Run ``pre-commit install`` to install pre-commit hooks
+1. Run ``make install-uv`` to install `uv <https://docs.astral.sh/uv/>`_ if not already installed
+1. Run ``make install`` to install all dependencies and pre-commit hooks
 
 Code contributions
 ------------------
@@ -17,7 +13,7 @@ Code contributions
 Workflow
 ++++++++
 
-1. `Fork <https://github.com/cofin/litestar-granian/fork>`_ the `Advanced Alchemy repository <https://github.com/cofin/litestar-granian>`_
+1. `Fork <https://github.com/litestar-org/litestar-granian/fork>`_ the `litestar-granian repository <https://github.com/litestar-org/litestar-granian>`_
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
@@ -57,22 +53,18 @@ The documentation is located in the ``/docs`` directory and is `ReST <https://do
 Running the docs locally
 ++++++++++++++++++++++++
 
-To run or build the docs locally, you need to first install the required dependencies:
-
-``pdm install -G:docs``
-
-Then you can serve the documentation with ``make docs-serve``, or build them with ``make docs``.
+You can serve the documentation with ``make docs-serve``, or build them with ``make docs``.
 
 Creating a new release
 ----------------------
 
-1. Increment the version in `pyproject.toml <https://github.com/cofin/litestar-granian/blob/main/pyproject.toml>`_.
+1. Increment the version in `pyproject.toml <https://github.com/litestar-org/litestar-granian/blob/main/pyproject.toml>`_.
     .. note:: The version should follow `semantic versioning <https://semver.org/>`_ and `PEP 440 <https://www.python.org/dev/peps/pep-0440/>`_.
-2. `Draft a new release <https://github.com/cofin/litestar-granian/releases/new>`_ on GitHub
+2. `Draft a new release <https://github.com/litestar-org/litestar-granian/releases/new>`_ on GitHub
 
    * Use ``vMAJOR.MINOR.PATCH`` (e.g. ``v1.2.3``) as both the tag and release title
    * Fill in the release description. You can use the "Generate release notes" function to get a draft for this
 3. Commit your changes and push to ``main``
 4. Publish the release
-5. Go to `Actions <https://github.com/cofin/litestar-granian/actions>`_ and approve the release workflow
+5. Go to `Actions <https://github.com/litestar-org/litestar-granian/actions>`_ and approve the release workflow
 6. Check that the workflow runs successfully

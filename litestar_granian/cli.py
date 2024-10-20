@@ -9,8 +9,12 @@ from dataclasses import fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import click
-from click import Context, command, option
+try:
+    from rich_click import Context, IntRange, command, option
+    from rich_click import Path as ClickPath
+except ImportError:
+    from click import Context, IntRange, command, option  # type: ignore[no-redef]
+    from click import Path as ClickPath
 from granian import Granian
 from granian._loops import loops  # noqa: PLC2701
 from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
@@ -57,7 +61,7 @@ if TYPE_CHECKING:
     "--web-concurrency",
     "--workers",
     help="The number of processes to start.",
-    type=click.IntRange(min=1, max=multiprocessing.cpu_count() + 1),
+    type=IntRange(min=1, max=multiprocessing.cpu_count() + 1),
     show_default=True,
     default=1,
     envvar=["LITESTAR_WEB_CONCURRENCY", "WEB_CONCURRENCY"],
@@ -65,14 +69,14 @@ if TYPE_CHECKING:
 @option(
     "--threads",
     help="The number of threads.",
-    type=click.IntRange(min=1),
+    type=IntRange(min=1),
     show_default=True,
     default=1,
 )
 @option(
     "--blocking-threads",
     help="The number of blocking threads.",
-    type=click.IntRange(min=1),
+    type=IntRange(min=1),
     show_default=True,
     default=1,
 )
@@ -82,27 +86,27 @@ if TYPE_CHECKING:
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog (globally)",
-    type=click.IntRange(min=128),
+    type=IntRange(min=128),
     show_default=True,
     default=1024,
 )
 @option(
     "--backpressure",
-    type=click.IntRange(1),
+    type=IntRange(1),
     show_default="backlog/workers",
     default=None,
     help="Maximum number of requests to process concurrently (per worker)",
 )
 @option(
     "--ssl-keyfile",
-    type=click.Path(file_okay=True, exists=True, dir_okay=False, readable=True),
+    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
     help="SSL key file",
     default=None,
     show_default=False,
 )
 @option(
     "--ssl-certificate",
-    type=click.Path(file_okay=True, exists=True, dir_okay=False, readable=True),
+    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
     help="SSL certificate file",
     default=None,
     show_default=False,
@@ -116,7 +120,7 @@ if TYPE_CHECKING:
 @option(
     "--http1-buffer-size",
     help="Set the maximum buffer size for HTTP/1 connections",
-    type=click.IntRange(min=8192),
+    type=IntRange(min=8192),
     show_default=True,
     default=HTTP1Settings.max_buffer_size,
 )
@@ -212,7 +216,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--workers-lifetime",
-    type=click.IntRange(60),
+    type=IntRange(60),
     help="The maximum amount of time in seconds a worker will be kept alive before respawn",
 )
 @option(
@@ -224,7 +228,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--reload-paths",
-    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
+    type=ClickPath(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
     help="Paths to watch for changes",
     show_default="Working directory",
     multiple=True,
@@ -247,7 +251,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--reload-ignore-paths",
-    type=click.Path(exists=False, path_type=Path),  # type: ignore[type-var]
+    type=ClickPath(exists=False, path_type=Path),  # type: ignore[type-var]
     help="Absolute paths to ignore changes for",
     multiple=True,
 )
@@ -257,7 +261,7 @@ if TYPE_CHECKING:
 )
 @option(
     "--pid-file",
-    type=click.Path(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),  # type: ignore[type-var]
+    type=ClickPath(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),  # type: ignore[type-var]
     help="A path to write the PID file to",
 )
 @option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
@@ -322,11 +326,12 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-    # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() == "Darwin":
-        multiprocessing.set_start_method("fork", force=True)
+    _set_multiprocessing_start_method()
 
     loops.get("auto")
+    if reload:
+        # code fails to fully reload unless this is set to true
+        in_subprocess = True
     if debug:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
@@ -436,6 +441,12 @@ def run_command(
                 url_path_prefix=url_path_prefix,
                 host=host,
             )
+
+
+def _set_multiprocessing_start_method() -> None:
+    # this is currently required because the latest litestar uses a QueueListener logging handler
+    if platform.system() in {"Darwin", "Windows"}:
+        multiprocessing.set_start_method("fork", force=True)
 
 
 def _run_granian(

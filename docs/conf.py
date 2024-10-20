@@ -10,12 +10,10 @@ from litestar_granian.__metadata__ import __version__ as version
 
 
 # -- Project information -----------------------------------------------------
-project = project
-author = "Cody Fincher"
-release = version
+project = "Litestar Granian"
+copyright = "2023, Litestar-Org"
+author = "Litestar-Org"
 release = os.getenv("_LITESTAR-GRANIAN_DOCS_BUILD_VERSION", version.rsplit(".")[0])
-copyright = "2023, Cody Fincher"
-
 # -- General configuration ---------------------------------------------------
 extensions = [
     "sphinx.ext.autodoc",
@@ -35,6 +33,9 @@ extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "msgspec": ("https://jcristharif.com/msgspec/", None),
+    "anyio": ("https://anyio.readthedocs.io/en/stable/", None),
+    "click": ("https://click.palletsprojects.com/en/8.1.x/", None),
     "litestar": ("https://docs.litestar.dev/latest/", None),
 }
 PY_CLASS = "py:class"
@@ -48,6 +49,9 @@ nitpick_ignore = [
     # external library / undocumented external
     (PY_CLASS, "ExternalType"),
     (PY_CLASS, "TypeEngine"),
+    (PY_CLASS, "Group"),
+    (PY_CLASS, "AppConfig"),
+    (PY_CLASS, "config.app.AppConfig"),
     (PY_CLASS, "UserDefinedType"),
     (PY_METH, "type_engine"),
     # type vars and aliases / intentionally undocumented
@@ -82,13 +86,13 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Style configuration -----------------------------------------------------
-html_theme = "shibuya"
+html_theme = "litestar_sphinx_theme"
 html_static_path = ["_static"]
-html_css_files = ["css/custom.css"]
-html_show_sourcelink = True
-html_title = "Docs"
-html_favicon = "_static/logo.png"
-html_logo = "_static/logo.png"
+html_css_files = ["style.css"]
+html_show_sourcelink = False
+html_title = "Litestar Granian"
+# html_favicon = "_static/logo.png"
+# html_logo = "_static/logo.png"
 html_context = {
     "source_type": "github",
     "source_user": "cofin",
@@ -106,47 +110,53 @@ brand_colors = {
 }
 
 html_theme_options = {
-    "logo_target": "/",
+    # "logo_target": "/",
     "announcement": "This documentation is currently under development.",
+    "logo": {
+        "link": "https://litestar.dev",
+    },
+    "github_repo_name": "Litestar Granian",
     "github_url": "https://github.com/cofin/litestar-granian",
-    "nav_links": [
-        {"title": "Home", "url": "https://cofin.github.io/litesatr-granian/"},
-        {"title": "Docs", "url": "https://cofin.github.io/litesatr-granian/latest/"},
-        {"title": "Code", "url": "https://github.com/cofin/litestar-granian"},
-    ],
-    "light_css_variables": {
-        # RGB
-        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
-        # "--sy-rc-bg": brand_colors["--brand-secondary"]["rgb"],
-        # Hex
-        "--sy-c-link": brand_colors["--brand-secondary"]["hex"],
-        # "--sy-c-foot-bg": "#191919",
-        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-text": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bg-weak": brand_colors["--brand-dark"]["rgb"],
-    },
-    "dark_css_variables": {
-        # RGB
-        "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
-        "--sy-rc-bg": brand_colors["--brand-dark"]["rgb"],
-        # Hex
-        "--sy-c-link": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-bg": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-foot-text": brand_colors["--brand-light"]["hex"],
-        "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
-        "--sy-c-text": brand_colors["--brand-light"]["hex"],
-        "--sy-c-bg-weak": brand_colors["--brand-dark"]["hex"],
-        "--sy-c-bg": brand_colors["--brand-primary"]["hex"],
-    },
+    "pygment_light_style": "xcode",
+    "pygment_dark_style": "lightbulb",
+    # "nav_links": [
+    #     {"title": "Home", "url": "https://cofin.github.io/litesatr-granian/"},
+    #     {"title": "Docs", "url": "https://cofin.github.io/litesatr-granian/latest/"},
+    #     {"title": "Code", "url": "https://github.com/cofin/litestar-granian"},
+    # ],
+    # "light_css_variables": {
+    #     # RGB
+    #     "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
+    #     "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
+    #     "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
+    #     # "--sy-rc-bg": brand_colors["--brand-secondary"]["rgb"],
+    #     # Hex
+    #     "--sy-c-link": brand_colors["--brand-secondary"]["hex"],
+    #     # "--sy-c-foot-bg": "#191919",
+    #     "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-foot-text": brand_colors["--brand-dark"]["hex"],
+    #     "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-text": brand_colors["--brand-dark"]["hex"],
+    #     "--sy-c-bg-weak": brand_colors["--brand-dark"]["rgb"],
+    # },
+    # "dark_css_variables": {
+    #     # RGB
+    #     "--sy-rc-theme": brand_colors["--brand-primary"]["rgb"],
+    #     "--sy-rc-text": brand_colors["--brand-primary"]["rgb"],
+    #     "--sy-rc-invert": brand_colors["--brand-primary"]["rgb"],
+    #     "--sy-rc-bg": brand_colors["--brand-dark"]["rgb"],
+    #     # Hex
+    #     "--sy-c-link": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-foot-bg": brand_colors["--brand-dark"]["hex"],
+    #     "--sy-c-foot-divider": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-foot-text": brand_colors["--brand-light"]["hex"],
+    #     "--sy-c-bold": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-heading": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-text-weak": brand_colors["--brand-primary"]["hex"],
+    #     "--sy-c-text": brand_colors["--brand-light"]["hex"],
+    #     "--sy-c-bg-weak": brand_colors["--brand-dark"]["hex"],
+    #     "--sy-c-bg": brand_colors["--brand-primary"]["hex"],
+    # },
 }
