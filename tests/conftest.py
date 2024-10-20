@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING, Callable, Protocol, cast
-
+from litestar_granian import cli
 import pytest
 from click.testing import CliRunner
 from litestar.cli._utils import (
@@ -190,11 +190,11 @@ def app_file_content(_app_file_content: tuple[str, str]) -> str:
 def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
     return cast("str", operator.itemgetter(1)(_app_file_content))
 
+def _no_op() -> None:
+    return None
+
 @pytest.fixture(autouse=True)
 def mock_multiprocessing_set(monkeypatch: pytest.MonkeyPatch,) -> Generator[None, None, None]:
-    if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "windows":
-        def _no_op() -> None:
-            return None
-        from litestar_granian import cli 
+    if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "win32":
         monkeypatch.setattr(cli,"_set_multiprocessing_start_method",_no_op)
     yield
