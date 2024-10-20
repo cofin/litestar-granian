@@ -10,6 +10,8 @@ from litestar.plugins.structlog import StructlogPlugin
 
 from litestar_granian import GranianPlugin
 
+__all__ = ("SampleController", "dont_run_forever")
+
 
 async def dont_run_forever() -> None:
     async def _fn() -> None:

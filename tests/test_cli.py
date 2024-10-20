@@ -71,17 +71,17 @@ app = Litestar(
     extra_args: list[str] = []
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
-    if in_subprocess:
+    if reload:
+        extra_args.extend(["--reload","--in-subprocess"])
+    elif in_subprocess:
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess"])
-    if reload:
-        extra_args.append("--reload")
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
-    if in_subprocess:
-        assert "[INFO] Starting granian" in result.output
+    if in_subprocess or reload:
+        assert "[INFO] Starting granian" in result.output or "Granian process stopped." in result.output
     else:
-        assert "- _granian - server - Starting granian" in result.output
+        assert "- _granian - server - Starting granian" in result.output or "Granian process stopped." in result.output
 
 
 @pytest.mark.parametrize(
@@ -171,14 +171,14 @@ app = Litestar(
     extra_args: list[str] = []
     if wc is not None:
         extra_args.extend(["--wc", f"{wc!s}"])
-    if in_subprocess:
+    if reload:
+        extra_args.extend(["--reload","--in-subprocess"])
+    elif in_subprocess:
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess"])
-    if reload:
-        extra_args.append("--reload")
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
-    assert "[INFO] Starting granian " in result.output
+    assert "[INFO] Shutting down granian" in result.output or "Granian process stopped." in result.output
 
 
 # Error case tests

@@ -1,4 +1,4 @@
-name: Documentation Preview
+name: Deploy Documentation Preview
 
 on:
   workflow_run:
@@ -25,14 +25,20 @@ jobs:
           path: docs-preview
           name: docs-preview
 
-      - name: Set PR number
-        run: echo "PR_NUMBER=$(cat docs-preview/.pr_number)" >> $GITHUB_ENV
+      - name: Validate and set PR number
+        run: |
+          PR_NUMBER=$(cat docs-preview/.pr_number)
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Invalid PR number: $PR_NUMBER"
+            exit 1
+          fi
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
       - name: Deploy docs preview
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: docs-preview/docs/_build/html
-          token: ${{ secrets.DOCS_PREVIEW_DEPLOY_TOKEN }}
+          token: ${{ secrets.DOCS_PREVIEW_DEPLOY_KEY }}
           repository-name: litestar-org/litestar-granian-docs-preview
           clean: false
           target-folder: ${{ env.PR_NUMBER }}
