@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import operator
+import os
 import sys
 from pathlib import Path
 from shutil import rmtree
@@ -188,3 +189,12 @@ def app_file_content(_app_file_content: tuple[str, str]) -> str:
 @pytest.fixture
 def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
     return cast("str", operator.itemgetter(1)(_app_file_content))
+
+@pytest.fixture(autouse=True)
+def mock_multiprocessing_set(monkeypatch: pytest.MonkeyPatch,) -> Generator[None, None, None]:
+    if os.getenv("GITHUB_ACTIONS") == "true" and sys.platform == "windows":
+        def _no_op() -> None:
+            return None
+        from litestar_granian import cli 
+        monkeypatch.setattr(cli,"_set_multiprocessing_start_method",_no_op)
+    yield

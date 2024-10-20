@@ -326,9 +326,7 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-    # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() in {"Darwin", "Windows"}:
-        multiprocessing.set_start_method("fork", force=True)
+    _set_multiprocessing_start_method()
 
     loops.get("auto")
     if reload:
@@ -444,6 +442,10 @@ def run_command(
                 host=host,
             )
 
+def _set_multiprocessing_start_method() -> None:
+    # this is currently required because the latest litestar uses a QueueListener logging handler
+    if platform.system() in {"Darwin", "Windows"}:
+        multiprocessing.set_start_method("fork", force=True)
 
 def _run_granian(
     env: LitestarEnv,
