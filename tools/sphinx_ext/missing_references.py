@@ -6,7 +6,7 @@ import ast
 import importlib
 import inspect
 import re
-from functools import cache
+from functools import cache  # pyright: ignore[reportAttributeAccessIssue]
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -83,7 +83,7 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
             continue
         if isinstance(targets, set) and target in targets:
             return True
-        if targets.match(target):  # pyright: ignore[reportAttributeAccessIssue]
+        if targets.match(target):  # pyright: ignore[reportArgumentType,reportAttributeAccessIssue]
             return True
 
     return None
