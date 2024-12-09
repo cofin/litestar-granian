@@ -21,14 +21,14 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
     __slots__ = ()
 
     def on_cli_init(self, cli: Group) -> None:  # noqa: PLR6301
-        from litestar.cli.main import litestar_group as cli  # noqa: PLC0415
+        from litestar.cli.main import litestar_group as cli
 
-        from litestar_granian.cli import run_command  # noqa: PLC0415
+        from litestar_granian.cli import run_command
 
         cli.add_command(run_command)  # pyright: ignore[reportArgumentType]
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:
-        from litestar.logging.config import LoggingConfig  # noqa: PLC0415
+        from litestar.logging.config import LoggingConfig
 
         if app_config.logging_config is not None and isinstance(app_config.logging_config, LoggingConfig):
             if app_config.logging_config.loggers.get("_granian", None) is None:
@@ -46,7 +46,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
                 )
             app_config.logging_config.configure()
         if STRUCTLOG_INSTALLED:
-            from litestar.plugins.structlog import StructlogPlugin  # noqa: PLC0415
+            from litestar.plugins.structlog import StructlogPlugin
 
             for plugin in app_config.plugins:
                 if (

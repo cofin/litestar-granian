@@ -69,7 +69,7 @@ def reset_litestar_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def patch_autodiscovery_paths(request: FixtureRequest) -> Callable[[list[str]], None]:
     def patcher(paths: list[str]) -> None:
-        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # noqa: PLC0415, PLC2701
+        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # noqa: PLC2701
 
         old_paths = AUTODISCOVERY_FILE_NAMES[::]
         AUTODISCOVERY_FILE_NAMES[:] = paths
@@ -102,7 +102,7 @@ def _purge_module(module_names: list[str], path: str | Path) -> None:
 
 @pytest.fixture()
 def root_command() -> LitestarGroup:
-    import litestar.cli.main  # noqa: PLC0415
+    import litestar.cli.main
 
     return cast("LitestarGroup", importlib.reload(litestar.cli.main).litestar_group)
 
@@ -184,13 +184,13 @@ def _app_file_content(request: FixtureRequest) -> tuple[str, str]:  # pyright: i
 
 
 @pytest.fixture
-def app_file_content(_app_file_content: tuple[str, str]) -> str:
-    return cast("str", operator.itemgetter(0)(_app_file_content))
+def app_file_content(app_file_content_: tuple[str, str]) -> str:
+    return cast("str", operator.itemgetter(0)(app_file_content_))
 
 
 @pytest.fixture
-def app_file_app_name(_app_file_content: tuple[str, str]) -> str:
-    return cast("str", operator.itemgetter(1)(_app_file_content))
+def app_file_app_name(app_file_content_: tuple[str, str]) -> str:
+    return cast("str", operator.itemgetter(1)(app_file_content_))
 
 
 def _no_op() -> None:

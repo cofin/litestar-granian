@@ -30,6 +30,8 @@ from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
 from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]  # noqa: PLC2701
 from litestar.logging import LoggingConfig
 
+from litestar_granian.manager import ProcessManager
+
 try:
     from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
 except ImportError:  # pragma: nocover
@@ -53,8 +55,13 @@ if TYPE_CHECKING:
 
 
 @command(name="run", context_settings={"show_default": True}, help="Start application server")
+# Server configuration
 @option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
+@option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
+@option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
+@option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
+# Process & Threading configuration
 @option(
     "-W",
     "--wc",
@@ -81,8 +88,6 @@ if TYPE_CHECKING:
     default=1,
 )
 @option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
-@option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
-@option("--opt", help="Enable additional event loop optimizations", is_flag=True, default=False)
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog (globally)",
@@ -97,26 +102,8 @@ if TYPE_CHECKING:
     default=None,
     help="Maximum number of requests to process concurrently (per worker)",
 )
-@option(
-    "--ssl-keyfile",
-    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
-    help="SSL key file",
-    default=None,
-    show_default=False,
-)
-@option(
-    "--ssl-certificate",
-    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
-    help="SSL certificate file",
-    default=None,
-    show_default=False,
-)
-@option(
-    "--create-self-signed-cert",
-    help="If certificate and key are not found at specified locations, create a self-signed certificate and a key",
-    is_flag=True,
-    envvar="LITESTAR_CREATE_SELF_SIGNED_CERT",
-)
+# HTTP configuration
+@option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option(
     "--http1-buffer-size",
     help="Set the maximum buffer size for HTTP/1 connections",
@@ -137,6 +124,7 @@ if TYPE_CHECKING:
     default=False,
     is_flag=True,
 )
+# HTTP/2 specific settings
 @option(
     "--http2-adaptive-window/--no-http2-adaptive-window",
     help="Sets whether to use an adaptive flow control for HTTP2",
@@ -200,9 +188,33 @@ if TYPE_CHECKING:
     show_default=False,
     default=HTTP2Settings.max_send_buffer_size,
 )
-@option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
-@option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
-@option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
+# SSL configuration
+@option(
+    "--ssl-keyfile",
+    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
+    help="SSL key file",
+    default=None,
+    show_default=False,
+)
+@option(
+    "--ssl-certificate",
+    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
+    help="SSL certificate file",
+    default=None,
+    show_default=False,
+)
+@option(
+    "--create-self-signed-cert",
+    help="If certificate and key are not found at specified locations, create a self-signed certificate and a key",
+    is_flag=True,
+    envvar="LITESTAR_CREATE_SELF_SIGNED_CERT",
+)
+@option("--ssl-keyfile-password", help="SSL key password")
+# Logging configuration
+@option("--log/--no-log", "log_enabled", default=True, help="Enable logging")
+@option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
+@option("--access-log-fmt", "log_access_fmt", help="Access log format")
+# Worker lifecycle
 @option(
     "--respawn-failed-workers/--no-respawn-failed-workers",
     help="Enable workers respawn on unexpected exit",
@@ -219,6 +231,7 @@ if TYPE_CHECKING:
     type=IntRange(60),
     help="The maximum amount of time in seconds a worker will be kept alive before respawn",
 )
+# Development & Debug options
 @option(
     "-r",
     "--reload/--no-reload",
@@ -255,6 +268,7 @@ if TYPE_CHECKING:
     help="Absolute paths to ignore changes for",
     multiple=True,
 )
+# Process management
 @option(
     "--process-name",
     help="Set a custom name for processes (requires granian[pname] extra)",
@@ -264,8 +278,6 @@ if TYPE_CHECKING:
     type=ClickPath(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),  # type: ignore[type-var]
     help="A path to write the PID file to",
 )
-@option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
-@option("--access-log-fmt", "log_access_fmt", help="Access log format")
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
@@ -303,12 +315,13 @@ def run_command(
     http: HTTPModes,
     log_access_enabled: bool,
     log_access_fmt: str | None,
-    opt: bool,
+    log_enabled: bool,
     backlog: int,
     backpressure: int | None,
     threading_mode: ThreadModes,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
+    ssl_keyfile_password: str | None,
     create_self_signed_cert: bool,
     url_path_prefix: str | None,
     process_name: str | None,
@@ -348,12 +361,13 @@ def run_command(
             ctx.obj.app.pdb_on_exception = True
 
     env: LitestarEnv = ctx.obj
+    del ctx
     threading_mode = threading_mode or ThreadModes.workers
     workers = wc
     if create_self_signed_cert:
-        _cert, _key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
-        ssl_certificate = ssl_certificate or Path(_cert) if _cert is not None else None  # pyright: ignore[reportUnnecessaryComparison]
-        ssl_keyfile = ssl_keyfile or Path(_key) if _key is not None else None  # pyright: ignore[reportUnnecessaryComparison]
+        cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
+        ssl_certificate = ssl_certificate or Path(cert) if cert is not None else None  # pyright: ignore[reportUnnecessaryComparison]
+        ssl_keyfile = ssl_keyfile or Path(key) if key is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     if not quiet_console and isatty():
         console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
@@ -372,7 +386,6 @@ def run_command(
                 workers_lifetime=workers_lifetime,
                 threads=threads,
                 http=http,
-                opt=opt,
                 backlog=backlog,
                 backpressure=backpressure,
                 blocking_threads=blocking_threads,
@@ -380,6 +393,7 @@ def run_command(
                 respawn_interval=respawn_interval,
                 log_access_enabled=log_access_enabled,
                 log_access_fmt=log_access_fmt,
+                log_enabled=log_enabled,
                 http1_buffer_size=http1_buffer_size,
                 http1_keep_alive=http1_keep_alive,
                 http1_pipeline_flush=http1_pipeline_flush,
@@ -397,6 +411,7 @@ def run_command(
                 pid_file=pid_file,
                 ssl_keyfile=ssl_keyfile,
                 ssl_certificate=ssl_certificate,
+                ssl_keyfile_password=ssl_keyfile_password,
                 url_path_prefix=url_path_prefix,
                 host=host,
             )
@@ -413,7 +428,6 @@ def run_command(
                 workers_lifetime=workers_lifetime,
                 threads=threads,
                 http=http,
-                opt=opt,
                 backlog=backlog,
                 backpressure=backpressure,
                 blocking_threads=blocking_threads,
@@ -421,6 +435,7 @@ def run_command(
                 respawn_interval=respawn_interval,
                 log_access_enabled=log_access_enabled,
                 log_access_fmt=log_access_fmt,
+                log_enabled=log_enabled,
                 http1_buffer_size=http1_buffer_size,
                 http1_keep_alive=http1_keep_alive,
                 http1_pipeline_flush=http1_pipeline_flush,
@@ -439,6 +454,7 @@ def run_command(
                 ssl_keyfile=ssl_keyfile,
                 ssl_certificate=ssl_certificate,
                 url_path_prefix=url_path_prefix,
+                ssl_keyfile_password=ssl_keyfile_password,
                 host=host,
             )
 
@@ -456,7 +472,6 @@ def _run_granian(
     wc: int,
     threads: int,
     http: HTTPModes,
-    opt: bool,
     backlog: int,
     backpressure: int | None,
     blocking_threads: int,
@@ -464,6 +479,7 @@ def _run_granian(
     respawn_interval: float,
     log_access_enabled: bool,
     log_access_fmt: str | None,
+    log_enabled: bool,
     http1_buffer_size: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
@@ -487,8 +503,20 @@ def _run_granian(
     pid_file: Path | None,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
+    ssl_keyfile_password: str | None,
     url_path_prefix: str | None,
 ) -> None:
+    import signal
+    from functools import partial
+
+    def handle_sigterm(server: Granian, signum: int, frame: Any) -> None:
+        """Handle SIGTERM/SIGINT gracefully."""
+        try:
+            server.shutdown()
+        finally:
+            console.print("[yellow]Granian process stopped.[/]")
+            sys.exit(0)
+
     if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
         if env.app.logging_config.loggers.get("_granian", None) is None:
             env.app.logging_config.loggers.update(
@@ -541,7 +569,6 @@ def _run_granian(
         blocking_threads=blocking_threads,
         threading_mode=threading_mode,
         loop=Loops.auto,
-        loop_opt=opt,
         http=http,
         websockets=http.value != HTTPModes.http2.value,
         backlog=backlog,
@@ -550,6 +577,7 @@ def _run_granian(
         http2_settings=http2_settings,
         ssl_cert=ssl_certificate,
         ssl_key=ssl_keyfile,
+        ssl_key_password=ssl_keyfile_password,
         url_path_prefix=url_path_prefix,
         respawn_failed_workers=respawn_failed_workers,
         respawn_interval=respawn_interval,
@@ -560,20 +588,22 @@ def _run_granian(
         reload_ignore_paths=reload_ignore_paths,
         process_name=process_name,
         pid_file=pid_file,
-        log_enabled=True,
+        log_enabled=log_enabled,
         log_access=log_access_enabled,
         log_access_format=log_access_fmt,
         log_level=LogLevels.info,
         log_dictconfig=log_dictconfig,
     )
-    try:
-        server.serve()
-    except KeyboardInterrupt:
-        server.shutdown()  # type: ignore[no-untyped-call]
-    except FatalError:
-        sys.exit(1)
-    finally:
-        console.print("[yellow]Granian process stopped.[/]")
+
+    # Set up signal handlers
+    signal.signal(signal.SIGTERM, partial(handle_sigterm, server))
+    signal.signal(signal.SIGINT, partial(handle_sigterm, server))
+
+    process_manager = ProcessManager(
+        server=server, shutdown_callback=lambda: console.print("[yellow]Shutdown complete.[/]")
+    )
+
+    process_manager.run()
 
 
 def _convert_granian_args(args: dict[str, Any]) -> list[str]:
@@ -600,7 +630,6 @@ def _run_granian_in_subprocess(
     wc: int,
     threads: int,
     http: HTTPModes,
-    opt: bool,
     backlog: int,
     backpressure: int | None,
     blocking_threads: int,
@@ -608,6 +637,7 @@ def _run_granian_in_subprocess(
     respawn_interval: float,
     log_access_enabled: bool,
     log_access_fmt: str | None,
+    log_enabled: bool,
     http1_buffer_size: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
@@ -631,6 +661,7 @@ def _run_granian_in_subprocess(
     pid_file: Path | None,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
+    ssl_keyfile_password: str | None,
     url_path_prefix: str | None,
 ) -> None:
     process_args: dict[str, Any] = {
@@ -644,7 +675,6 @@ def _run_granian_in_subprocess(
         "threading-mode": threading_mode.value,
         "blocking-threads": blocking_threads,
         "loop": Loops.auto.value,
-        "opt": opt,
         "respawn-failed-workers": respawn_failed_workers,
         "respawn-interval": respawn_interval,
         "backlog": backlog,
@@ -667,6 +697,8 @@ def _run_granian_in_subprocess(
         process_args["access-log"] = log_access_enabled
     if log_access_fmt:
         process_args["access-log-fmt"] = log_access_fmt
+    if not log_enabled:
+        process_args["no-log"] = True
     if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
         process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-buffer-size"] = http1_buffer_size
@@ -690,6 +722,8 @@ def _run_granian_in_subprocess(
         process_args["ssl-certfile"] = ssl_certificate
     if ssl_keyfile is not None:
         process_args["ssl-keyfile"] = ssl_keyfile
+    if ssl_keyfile_password is not None:
+        process_args["ssl-keyfile-password"] = ssl_keyfile_password
     if process_name is not None:
         process_args["process-name"] = process_name
     if pid_file is not None:
