@@ -3,12 +3,14 @@ from __future__ import annotations
 import signal
 import sys
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
-from granian import Granian
-from rich.console import Console
+from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
+    console,  # noqa: PLC2701
+)
 
-console = Console()
+if TYPE_CHECKING:
+    from granian import Granian
 
 
 @dataclass
@@ -41,7 +43,7 @@ class ProcessManager:
             self.server.shutdown()  # type: ignore[no-untyped-call]
             if self.shutdown_callback:
                 self.shutdown_callback()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             console.print(f"[red]Error running server: {e}[/]")
             sys.exit(1)
         finally:
