@@ -512,7 +512,7 @@ def _run_granian(
     def handle_sigterm(server: Granian, signum: int, frame: Any) -> None:
         """Handle SIGTERM/SIGINT gracefully."""
         try:
-            server.shutdown()
+            server.shutdown()  # type: ignore[no-untyped-call]
         finally:
             console.print("[yellow]Granian process stopped.[/]")
             sys.exit(0)
