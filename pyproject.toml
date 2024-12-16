@@ -34,7 +34,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.8.0"
+version = "0.9.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -143,7 +143,7 @@ exclude_lines = [
 branch = true
 concurrency = ["multiprocessing"]
 disable_warnings = ["no-data-collected", "module-not-measured", "module-not-imported"]
-omit = ["litestar_granian/__metadata__.py", "tests/*", "scripts/*"]
+omit = ["litestar_granian/__metadata__.py", "tests/*", "tools/*"]
 parallel = true
 
 
