@@ -117,6 +117,6 @@ def setup(app: Sphinx) -> dict[str, bool]:
     app.connect("env-before-read-docs", on_env_before_read_docs)
     app.connect("missing-reference", on_missing_reference)
     app.connect("warn-missing-reference", on_warn_missing_reference)
-    app.add_config_value("ignore_missing_refs", default={}, rebuild=False)
+    app.add_config_value("ignore_missing_refs", default={}, rebuild="")
 
     return {"parallel_read_safe": True, "parallel_write_safe": True}

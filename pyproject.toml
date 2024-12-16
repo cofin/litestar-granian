@@ -23,7 +23,8 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.7.0",
-  "granian[all]>=1.6.0",
+  "granian[reload,pname]<1.7.0; python_version == \"3.8\"",
+  "granian[reload,pname]>=1.7.0; python_version > \"3.8\"",
   "fast-query-parsers",
   "httptools",
   "uvloop; sys_platform != 'win32'",
@@ -34,7 +35,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.8.0"
+version = "0.9.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -143,7 +144,7 @@ exclude_lines = [
 branch = true
 concurrency = ["multiprocessing"]
 disable_warnings = ["no-data-collected", "module-not-measured", "module-not-imported"]
-omit = ["litestar_granian/__metadata__.py", "tests/*", "scripts/*"]
+omit = ["litestar_granian/__metadata__.py", "tests/*", "tools/*"]
 parallel = true
 
 

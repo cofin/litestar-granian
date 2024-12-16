@@ -231,6 +231,12 @@ if TYPE_CHECKING:
     type=IntRange(60),
     help="The maximum amount of time in seconds a worker will be kept alive before respawn",
 )
+@option(
+    "--workers-kill-timeout",
+    type=IntRange(1, 1800),
+    help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
+    show_default="disabled",
+)
 # Development & Debug options
 @option(
     "-r",
@@ -300,6 +306,7 @@ def run_command(
     respawn_failed_workers: bool,
     respawn_interval: float,
     workers_lifetime: int | None,
+    workers_kill_timeout: int | None,
     http1_keep_alive: bool,
     http1_buffer_size: int,
     http1_pipeline_flush: bool,
@@ -391,6 +398,7 @@ def run_command(
                 blocking_threads=blocking_threads,
                 respawn_failed_workers=respawn_failed_workers,
                 respawn_interval=respawn_interval,
+                workers_kill_timeout=workers_kill_timeout,
                 log_access_enabled=log_access_enabled,
                 log_access_fmt=log_access_fmt,
                 log_enabled=log_enabled,
@@ -433,6 +441,7 @@ def run_command(
                 blocking_threads=blocking_threads,
                 respawn_failed_workers=respawn_failed_workers,
                 respawn_interval=respawn_interval,
+                workers_kill_timeout=workers_kill_timeout,
                 log_access_enabled=log_access_enabled,
                 log_access_fmt=log_access_fmt,
                 log_enabled=log_enabled,
@@ -477,6 +486,7 @@ def _run_granian(
     blocking_threads: int,
     respawn_failed_workers: bool,
     respawn_interval: float,
+    workers_kill_timeout: int | None,
     log_access_enabled: bool,
     log_access_fmt: str | None,
     log_enabled: bool,
@@ -581,6 +591,7 @@ def _run_granian(
         url_path_prefix=url_path_prefix,
         respawn_failed_workers=respawn_failed_workers,
         respawn_interval=respawn_interval,
+        workers_kill_timeout=workers_kill_timeout,
         reload=reload,
         reload_paths=reload_paths,
         reload_ignore_dirs=reload_ignore_dirs,
@@ -652,6 +663,7 @@ def _run_granian_in_subprocess(
     http2_max_send_buffer_size: int,
     threading_mode: ThreadModes,
     workers_lifetime: int | None,
+    workers_kill_timeout: int | None,
     reload: bool,
     reload_paths: list[Path] | None,
     reload_ignore_dirs: list[str] | None,
@@ -697,6 +709,8 @@ def _run_granian_in_subprocess(
         process_args["access-log"] = log_access_enabled
     if log_access_fmt:
         process_args["access-log-fmt"] = log_access_fmt
+    if workers_kill_timeout:
+        process_args["workers-kill-timeout"] = workers_kill_timeout
     if not log_enabled:
         process_args["no-log"] = True
     if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
