@@ -23,7 +23,8 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.7.0",
-  "granian[all]>=1.6.0",
+  "granian[reload,pname]<1.7.0; python_version == \"3.8\"",
+  "granian[reload,pname]>=1.7.0; python_version > \"3.8\"",
   "fast-query-parsers",
   "httptools",
   "uvloop; sys_platform != 'win32'",
