@@ -733,7 +733,7 @@ def _run_granian_in_subprocess(
     if url_path_prefix is not None:
         process_args["url-path-prefix"] = url_path_prefix
     if ssl_certificate is not None:
-        process_args["ssl-certfile"] = ssl_certificate
+        process_args["ssl-certificate"] = ssl_certificate
     if ssl_keyfile is not None:
         process_args["ssl-keyfile"] = ssl_keyfile
     if ssl_keyfile_password is not None:
