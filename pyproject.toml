@@ -25,6 +25,7 @@ dependencies = [
   "litestar>=2.7.0",
   "granian[reload,pname]<1.7.0; python_version == \"3.8\"",
   "granian[reload,pname]>=1.7.0; python_version > \"3.8\"",
+  "httptools",
 ]
 description = "Granian plugin for Litestar"
 keywords = ["litestar", "granian", "asgi"]
