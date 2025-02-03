@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import multiprocessing
 import os
-import platform
 import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
@@ -346,7 +345,6 @@ def run_command(
     functions with the name ``create_app`` are considered, or functions that are annotated as returning a ``Litestar``
     instance.
     """
-    _set_multiprocessing_start_method()
 
     loops.get("auto")
     if reload:
@@ -466,12 +464,6 @@ def run_command(
                 ssl_keyfile_password=ssl_keyfile_password,
                 host=host,
             )
-
-
-def _set_multiprocessing_start_method() -> None:
-    # this is currently required because the latest litestar uses a QueueListener logging handler
-    if platform.system() in {"Darwin", "Windows"}:
-        multiprocessing.set_start_method("fork", force=True)
 
 
 def _run_granian(
