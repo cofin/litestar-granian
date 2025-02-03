@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import operator
-import os
 import sys
 from pathlib import Path
 from shutil import rmtree
@@ -14,8 +13,6 @@ from litestar.cli._utils import (
     LitestarGroup,
     _path_to_dotted_path,  # noqa: PLC2701
 )
-
-from litestar_granian import cli
 
 if TYPE_CHECKING:
     from collections.abc import Generator
