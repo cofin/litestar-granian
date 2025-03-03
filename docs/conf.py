@@ -59,6 +59,7 @@ nitpick_ignore = [
     (PY_CLASS, "EmptyType"),
     (PY_CLASS, "ModelT"),
     (PY_CLASS, "T"),
+    (PY_CLASS, "litestar_granian.cli.FC"),
 ]
 nitpick_ignore_regex = [
     (PY_RE, r"litestar_granian.*\.T"),

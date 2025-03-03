@@ -1,9 +1,9 @@
+import enum
 import multiprocessing
 import os
 import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
 
@@ -74,13 +74,28 @@ if TYPE_CHECKING:
 class EnumType(Choice):
     """A click type for enums."""
 
-    def __init__(self, enum: Enum, case_sensitive: bool = False) -> None:
+    def __init__(self, enum: enum.Enum, case_sensitive: bool = False) -> None:
         """Initialize the EnumType."""
         self.__enum = enum
         super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)  # type: ignore
 
-    def convert(self, value: Any, param: "Optional[Parameter]", ctx: "Optional[Context]") -> "Enum":
-        if value is None or isinstance(value, Enum):
+    def convert(self, value: Any, param: "Optional[Parameter]", ctx: "Optional[Context]") -> "enum.Enum":
+        """Convert a value to an Enum member.
+
+        Takes a value and attempts to convert it to the corresponding Enum member. If the value is
+        already None or an Enum instance, it returns the value as-is. Otherwise, it converts the
+        value to a string and looks up the corresponding Enum member.
+
+        Args:
+            value: The value to convert to an Enum member
+            param: Optional Click Parameter object
+            ctx: Optional Click Context object
+
+        Returns:
+            enum.Enum: The Enum member corresponding to the value
+        """
+        """Convert the value to an Enum."""
+        if value is None or isinstance(value, enum.Enum):
             return value  # type: ignore[return-value]
 
         converted_str = super().convert(value, param, ctx)
