@@ -16,7 +16,7 @@ except ImportError:
     from click import Path as ClickPath
 from granian import Granian
 from granian._loops import loops  # noqa: PLC2701
-from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
+from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LogLevels
@@ -86,7 +86,7 @@ if TYPE_CHECKING:
     show_default=True,
     default=1,
 )
-@option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
+@option("--runtime-mode", help="Runtime mode to use.", type=RuntimeModes, default=RuntimeModes.st)
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog (globally)",
@@ -324,7 +324,7 @@ def run_command(
     log_enabled: bool,
     backlog: int,
     backpressure: int | None,
-    threading_mode: ThreadModes,
+    runtime_mode: RuntimeModes,
     ssl_keyfile: Path | None,
     ssl_certificate: Path | None,
     ssl_keyfile_password: str | None,
@@ -367,7 +367,7 @@ def run_command(
 
     env: LitestarEnv = ctx.obj
     del ctx
-    threading_mode = threading_mode or ThreadModes.workers
+    runtime_mode = runtime_mode or RuntimeModes.st
     workers = wc
     if create_self_signed_cert:
         cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
@@ -412,7 +412,7 @@ def run_command(
                 http2_max_frame_size=http2_max_frame_size,
                 http2_max_headers_size=http2_max_headers_size,
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
-                threading_mode=threading_mode,
+                runtime_mode=runtime_mode,
                 process_name=process_name,
                 pid_file=pid_file,
                 ssl_keyfile=ssl_keyfile,
@@ -455,7 +455,7 @@ def run_command(
                 http2_max_frame_size=http2_max_frame_size,
                 http2_max_headers_size=http2_max_headers_size,
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
-                threading_mode=threading_mode,
+                runtime_mode=runtime_mode,
                 process_name=process_name,
                 pid_file=pid_file,
                 ssl_keyfile=ssl_keyfile,
@@ -494,7 +494,7 @@ def _run_granian(
     http2_max_frame_size: int,
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
+    runtime_mode: RuntimeModes,
     workers_lifetime: int | None,
     reload: bool,
     reload_paths: list[Path] | None,
@@ -569,7 +569,7 @@ def _run_granian(
         workers_lifetime=workers_lifetime,
         threads=threads,
         blocking_threads=blocking_threads,
-        threading_mode=threading_mode,
+        runtime_mode=runtime_mode,
         loop=Loops.auto,
         http=http,
         websockets=http.value != HTTPModes.http2.value,
@@ -653,7 +653,7 @@ def _run_granian_in_subprocess(
     http2_max_frame_size: int,
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
+    runtime_mode: RuntimeModes,
     workers_lifetime: int | None,
     workers_kill_timeout: int | None,
     reload: bool,
@@ -676,7 +676,7 @@ def _run_granian_in_subprocess(
         "http": http.value,
         "threads": threads,
         "workers": wc,
-        "threading-mode": threading_mode.value,
+        "runtime-mode": runtime_mode.value,
         "blocking-threads": blocking_threads,
         "loop": Loops.auto.value,
         "respawn-failed-workers": respawn_failed_workers,

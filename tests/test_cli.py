@@ -4,7 +4,7 @@ import textwrap
 from typing import TYPE_CHECKING
 
 import pytest
-from granian.constants import ThreadModes
+from granian.constants import RuntimeModes
 
 from litestar_granian.cli import run_command
 
@@ -183,7 +183,7 @@ app = Litestar(
 
 # Error case tests
 @pytest.mark.parametrize(
-    "reload, port, wc, threads, http, no_opt, backlog, threading_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
+    "reload, port, wc, threads, http, no_opt, backlog, runtime_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
     [
         (
             False,
@@ -193,7 +193,7 @@ app = Litestar(
             "HTTP",
             False,
             1024,
-            ThreadModes.workers,
+            RuntimeModes.st,
             None,
             None,
             None,
@@ -228,7 +228,7 @@ def test_run_command_error_cases(
     http: str,
     no_opt: bool,
     backlog: int,
-    threading_mode: str,
+    runtime_mode: str,
     ssl_keyfile: str,
     ssl_certificate: str,
     url_path_prefix: str,
@@ -251,8 +251,8 @@ def test_run_command_error_cases(
             "--no-opt" if no_opt else "",
             "--backlog",
             str(backlog),
-            "--threading-mode",
-            threading_mode,
+            "--runtime-mode",
+            runtime_mode,
             "--ssl-keyfile",
             ssl_keyfile,
             "--ssl-certificate",
