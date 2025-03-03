@@ -183,7 +183,7 @@ app = Litestar(
 
 # Error case tests
 @pytest.mark.parametrize(
-    "reload, port, wc, threads, http, no_opt, backlog, runtime_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
+    "reload, port, wc, runtime_threads, http, no_opt, backlog, runtime_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
     [
         (
             False,
@@ -209,7 +209,7 @@ app = Litestar(
             "HTTP2",
             True,
             2048,
-            "threads",
+            RuntimeModes.mt,
             "keyfile.pem",
             "certificate.pem",
             "/prefix",
@@ -224,7 +224,7 @@ def test_run_command_error_cases(
     reload: bool,
     port: int,
     wc: int,
-    threads: int,
+    runtime_threads: int,
     http: str,
     no_opt: bool,
     backlog: int,
@@ -244,8 +244,8 @@ def test_run_command_error_cases(
             str(port),
             "--wc",
             str(wc),
-            "--threads",
-            str(threads),
+            "--runtime-threads",
+            str(runtime_threads),
             "--http",
             http,
             "--no-opt" if no_opt else "",
