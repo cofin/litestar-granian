@@ -10,7 +10,7 @@ from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
 )
 
 if TYPE_CHECKING:
-    from granian import Granian
+    from granian.server import Server as Granian  # type: ignore
 
 
 @dataclass
