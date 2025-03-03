@@ -799,11 +799,7 @@ def _run_granian_in_subprocess(
         "http": http.value,
         "workers": wc,
         "respawn-failed-workers": respawn_failed_workers,
-        "respawn-interval": respawn_interval,
-        "blocking-threads": blocking_threads,
-        "blocking-threads-idle-timeout": blocking_threads_idle_timeout,
-        "runtime-threads": runtime_threads,
-        "runtime-blocking-threads": runtime_blocking_threads,
+        "respawn-interval": respawn_interval,  
         "runtime-mode": runtime_mode.value,
         "loop": loop.value,
         "task-impl": task_impl.value,
@@ -830,6 +826,16 @@ def _run_granian_in_subprocess(
         process_args["access-log-fmt"] = log_access_fmt
     if workers_kill_timeout:
         process_args["workers-kill-timeout"] = workers_kill_timeout
+    if blocking_threads:
+        process_args["blocking-threads"] = blocking_threads
+    if blocking_threads_idle_timeout:
+        process_args["blocking-threads-idle-timeout"] = blocking_threads_idle_timeout
+    if runtime_threads:
+        process_args["runtime-threads"] = runtime_threads
+    if runtime_blocking_threads:
+        process_args["runtime-blocking-threads"] = runtime_blocking_threads
+    if runtime_mode:
+        process_args["runtime-mode"] = runtime_mode.value
     if not log_enabled:
         process_args["no-log"] = True
     if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
