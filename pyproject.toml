@@ -10,11 +10,11 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -23,8 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.7.0",
-  "granian[reload,pname]<1.7.0; python_version == \"3.8\"",
-  "granian[reload,pname]>=1.7.0; python_version > \"3.8\"",
+  "granian[reload,pname]>=2.0.0",
   "httptools",
 ]
 description = "Granian plugin for Litestar"
@@ -32,8 +31,8 @@ keywords = ["litestar", "granian", "asgi"]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
-requires-python = ">=3.8"
-version = "0.10.0"
+requires-python = ">=3.9"
+version = "0.12.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -42,6 +41,11 @@ Documentation = "https://cofin.github.io/litesatr-granian/latest/"
 Homepage = "https://cofin.github.io/litesatr-granian/latest/"
 Issue = "https://github.com/cofin/litestar-granian/issues/"
 Source = "https://github.com/cofin/litestar-granian"
+
+
+[project.optional-dependencies]
+rloop = ["rloop"]
+uvloop = ["uvloop; platform_system != 'Windows'"]
 
 ######################
 # Build & Versioning #
@@ -241,6 +245,7 @@ lint.ignore = [
   "COM812",
   "PLR0917",
   "CPY001",  # copywrite check
+  "FA100", # future annotations check
 ]
 lint.select = ["ALL"]
 # Allow unused variables when underscore-prefixed.

@@ -1,26 +1,46 @@
-from __future__ import annotations
-
+import enum
 import multiprocessing
 import os
 import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+
+from litestar_granian.manager import ProcessManager
 
 try:
-    from rich_click import Context, IntRange, command, option
+    from rich_click import (
+        Choice,
+        Command,
+        Context,
+        IntRange,
+        Option,
+        Parameter,
+        command,
+    )
     from rich_click import Path as ClickPath
+    from rich_click import option as click_option
 except ImportError:
-    from click import Context, IntRange, command, option  # type: ignore[no-redef]
+    from click import (  # type: ignore[no-redef]
+        Choice,
+        Command,
+        Context,
+        IntRange,
+        Option,
+        Parameter,
+        command,
+    )
     from click import Path as ClickPath
-from granian import Granian
+    from click import option as click_option
 from granian._loops import loops  # noqa: PLC2701
-from granian.constants import HTTPModes, Interfaces, Loops, ThreadModes
+from granian.cli import _pretty_print_default  # noqa: PLC2701
+from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
-from granian.log import LogLevels
-from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
+from granian.log import LOGGING_CONFIG, LogLevels
+from granian.server import Server as Granian  # type: ignore[attr-defined] # pyright: ignore[reportPrivateUsage]
+from litestar.cli._utils import (
     LitestarEnv,
     console,  # noqa: PLC2701
     create_ssl_files,  # noqa: PLC2701
@@ -28,8 +48,6 @@ from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
 )
 from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]  # noqa: PLC2701
 from litestar.logging import LoggingConfig
-
-from litestar_granian.manager import ProcessManager
 
 try:
     from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
@@ -53,40 +71,97 @@ if TYPE_CHECKING:
     from litestar.cli._utils import LitestarEnv
 
 
+class EnumType(Choice):
+    """A click type for enums."""
+
+    def __init__(self, enum: enum.Enum, case_sensitive: bool = False) -> None:
+        """Initialize the EnumType."""
+        self.__enum = enum
+        super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)  # type: ignore
+
+    def convert(self, value: Any, param: "Optional[Parameter]", ctx: "Optional[Context]") -> "enum.Enum":
+        """Convert a value to an Enum member.
+
+        Takes a value and attempts to convert it to the corresponding Enum member. If the value is
+        already None or an Enum instance, it returns the value as-is. Otherwise, it converts the
+        value to a string and looks up the corresponding Enum member.
+
+        Args:
+            value: The value to convert to an Enum member
+            param: Optional Click Parameter object
+            ctx: Optional Click Context object
+
+        Returns:
+            enum.Enum: The Enum member corresponding to the value
+        """
+        """Convert the value to an Enum."""
+        if value is None or isinstance(value, enum.Enum):
+            return value  # type: ignore[return-value]
+
+        converted_str = super().convert(value, param, ctx)
+        return self.__enum(converted_str)  # type: ignore[no-any-return,operator]
+
+
+_AnyCallable = Callable[..., Any]
+FC = TypeVar("FC", bound=Union[_AnyCallable, Command])
+
+
+def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any) -> "Callable[[FC], FC]":
+    attrs["show_envvar"] = True
+    if "default" in attrs:
+        attrs["show_default"] = _pretty_print_default(attrs["default"])
+    return click_option(*param_decls, cls=cls, **attrs)  # type: ignore
+
+
 @command(name="run", context_settings={"show_default": True}, help="Start application server")
 # Server configuration
-@option("-H", "--host", help="Server under this host", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
-@option("-p", "--port", help="Serve under this port", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
+@option("-H", "--host", help="Host address to bind to", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
+@option("-p", "--port", help="Port to bind to", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
+@option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
 @option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
-@option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
 # Process & Threading configuration
 @option(
     "-W",
     "--wc",
     "--web-concurrency",
     "--workers",
-    help="The number of processes to start.",
+    help="The number of worker processes",
     type=IntRange(min=1, max=multiprocessing.cpu_count() + 1),
     show_default=True,
     default=1,
     envvar=["LITESTAR_WEB_CONCURRENCY", "WEB_CONCURRENCY"],
 )
 @option(
-    "--threads",
-    help="The number of threads.",
-    type=IntRange(min=1),
-    show_default=True,
-    default=1,
+    "--blocking-threads",
+    type=IntRange(1),
+    help="Number of blocking threads (per worker)",
 )
 @option(
-    "--blocking-threads",
-    help="The number of blocking threads.",
-    type=IntRange(min=1),
-    show_default=True,
-    default=1,
+    "--blocking-threads-idle-timeout",
+    type=IntRange(10, 600),
+    default=30,
+    help="The maximum amount of time in seconds an idle blocking thread will be kept alive",
 )
-@option("--threading-mode", help="Threading mode to use.", type=ThreadModes, default=ThreadModes.workers.value)
+@option("--runtime-threads", type=IntRange(1), default=1, help="Number of runtime threads (per worker)")
+@option(
+    "--runtime-blocking-threads",
+    type=IntRange(1),
+    help="Number of runtime I/O blocking threads (per worker)",
+)
+@option(
+    "--runtime-mode",
+    type=EnumType(RuntimeModes),  # type: ignore[arg-type]
+    default=RuntimeModes.st,
+    help="Runtime mode to use (single/multi threaded)",
+)
+@option("--loop", type=EnumType(Loops), default=Loops.auto, help="Event loop implementation")  # type: ignore[arg-type]
+@option(
+    "--task-impl",
+    type=EnumType(TaskImpl),  # type: ignore[arg-type]
+    default=TaskImpl.asyncio,
+    help="Async task implementation to use",
+)
 @option(
     "--backlog",
     help="Maximum number of connections to hold in backlog (globally)",
@@ -102,13 +177,17 @@ if TYPE_CHECKING:
     help="Maximum number of requests to process concurrently (per worker)",
 )
 # HTTP configuration
-@option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option(
     "--http1-buffer-size",
-    help="Set the maximum buffer size for HTTP/1 connections",
-    type=IntRange(min=8192),
-    show_default=True,
+    type=IntRange(8192),
     default=HTTP1Settings.max_buffer_size,
+    help="Sets the maximum buffer size for HTTP/1 connections",
+)
+@option(
+    "--http1-header-read-timeout",
+    type=IntRange(1, 60_000),
+    default=HTTP1Settings.header_read_timeout,
+    help="Sets a timeout (in milliseconds) to read headers",
 )
 @option(
     "--http1-keep-alive/--no-http1-keep-alive",
@@ -187,18 +266,22 @@ if TYPE_CHECKING:
     show_default=False,
     default=HTTP2Settings.max_send_buffer_size,
 )
+@option("--granian-log/--granian-no-log", "log_enabled", default=True, help="Enable logging")
+@option("--granian-log-level", "log_level", type=EnumType(LogLevels), default=LogLevels.info, help="Log level")  # type: ignore[arg-type]
+@option("--granian-access-log/--granian-no-access-log", "log_access_enabled", default=False, help="Enable access log")
+@option("--granian-access-log-fmt", "log_access_fmt", help="Access log format")
 # SSL configuration
-@option(
-    "--ssl-keyfile",
-    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
-    help="SSL key file",
-    default=None,
-    show_default=False,
-)
 @option(
     "--ssl-certificate",
     type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
     help="SSL certificate file",
+    default=None,
+    show_default=False,
+)
+@option(
+    "--ssl-keyfile",
+    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
+    help="SSL key file",
     default=None,
     show_default=False,
 )
@@ -210,9 +293,7 @@ if TYPE_CHECKING:
 )
 @option("--ssl-keyfile-password", help="SSL key password")
 # Logging configuration
-@option("--log/--no-log", "log_enabled", default=True, help="Enable logging")
-@option("--access-log/--no-access-log", "log_access_enabled", default=False, help="Enable access log")
-@option("--access-log-fmt", "log_access_fmt", help="Access log format")
+@option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
 # Worker lifecycle
 @option(
     "--respawn-failed-workers/--no-respawn-failed-workers",
@@ -291,47 +372,53 @@ if TYPE_CHECKING:
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
 def run_command(
-    app: Litestar,
-    reload: bool,
-    reload_paths: list[Path] | None,
-    reload_ignore_dirs: list[str] | None,
-    reload_ignore_patterns: list[str] | None,
-    reload_ignore_paths: list[Path] | None,
+    app: "Litestar",
     host: str,
     port: int,
+    http: "HTTPModes",
     wc: int,
-    threads: int,
-    blocking_threads: int,
-    respawn_failed_workers: bool,
-    respawn_interval: float,
-    workers_lifetime: int | None,
-    workers_kill_timeout: int | None,
-    http1_keep_alive: bool,
+    blocking_threads: Optional[int],
+    blocking_threads_idle_timeout: int,
+    runtime_threads: int,
+    runtime_blocking_threads: Optional[int],
+    runtime_mode: "RuntimeModes",
+    loop: "Loops",
+    task_impl: "TaskImpl",
+    backlog: int,
+    backpressure: Optional[int],
     http1_buffer_size: int,
+    http1_header_read_timeout: int,
+    http1_keep_alive: bool,
     http1_pipeline_flush: bool,
     http2_adaptive_window: bool,
     http2_initial_connection_window_size: int,
     http2_initial_stream_window_size: int,
-    http2_keep_alive_interval: int | None,
+    http2_keep_alive_interval: Optional[int],
     http2_keep_alive_timeout: int,
     http2_max_concurrent_streams: int,
     http2_max_frame_size: int,
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
-    http: HTTPModes,
-    log_access_enabled: bool,
-    log_access_fmt: str | None,
     log_enabled: bool,
-    backlog: int,
-    backpressure: int | None,
-    threading_mode: ThreadModes,
-    ssl_keyfile: Path | None,
-    ssl_certificate: Path | None,
-    ssl_keyfile_password: str | None,
+    log_access_enabled: bool,
+    log_access_fmt: Optional[str],
+    log_level: "LogLevels",
+    ssl_certificate: Optional[Path],
+    ssl_keyfile: Optional[Path],
+    ssl_keyfile_password: Optional[str],
     create_self_signed_cert: bool,
-    url_path_prefix: str | None,
-    process_name: str | None,
-    pid_file: Path | None,
+    url_path_prefix: Optional[str],
+    respawn_failed_workers: bool,
+    respawn_interval: float,
+    workers_lifetime: Optional[int],
+    workers_kill_timeout: Optional[int],
+    reload: bool,
+    reload_paths: Optional[list[Path]],
+    reload_ignore_dirs: Optional[list[str]],
+    reload_ignore_patterns: Optional[list[str]],
+    reload_ignore_paths: Optional[list[Path]],
+    process_name: Optional[str],
+    pid_file: Optional[Path],
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
@@ -367,7 +454,6 @@ def run_command(
 
     env: LitestarEnv = ctx.obj
     del ctx
-    threading_mode = threading_mode or ThreadModes.workers
     workers = wc
     if create_self_signed_cert:
         cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
@@ -381,26 +467,21 @@ def run_command(
         if in_subprocess:
             _run_granian_in_subprocess(
                 env=env,
-                reload=reload,
-                reload_paths=reload_paths,
-                reload_ignore_dirs=reload_ignore_dirs,
-                reload_ignore_patterns=reload_ignore_patterns,
-                reload_ignore_paths=reload_ignore_paths,
                 port=port,
                 wc=workers,
-                workers_lifetime=workers_lifetime,
-                threads=threads,
+                host=host,
                 http=http,
+                blocking_threads=blocking_threads,
+                blocking_threads_idle_timeout=blocking_threads_idle_timeout,
+                runtime_threads=runtime_threads,
+                runtime_blocking_threads=runtime_blocking_threads,
+                runtime_mode=runtime_mode,
+                loop=loop,
+                task_impl=task_impl,
                 backlog=backlog,
                 backpressure=backpressure,
-                blocking_threads=blocking_threads,
-                respawn_failed_workers=respawn_failed_workers,
-                respawn_interval=respawn_interval,
-                workers_kill_timeout=workers_kill_timeout,
-                log_access_enabled=log_access_enabled,
-                log_access_fmt=log_access_fmt,
-                log_enabled=log_enabled,
                 http1_buffer_size=http1_buffer_size,
+                http1_header_read_timeout=http1_header_read_timeout,
                 http1_keep_alive=http1_keep_alive,
                 http1_pipeline_flush=http1_pipeline_flush,
                 http2_adaptive_window=http2_adaptive_window,
@@ -412,38 +493,44 @@ def run_command(
                 http2_max_frame_size=http2_max_frame_size,
                 http2_max_headers_size=http2_max_headers_size,
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
-                threading_mode=threading_mode,
-                process_name=process_name,
-                pid_file=pid_file,
-                ssl_keyfile=ssl_keyfile,
+                log_enabled=log_enabled,
+                log_access_enabled=log_access_enabled,
+                log_access_fmt=log_access_fmt,
+                log_level=log_level,
                 ssl_certificate=ssl_certificate,
+                ssl_keyfile=ssl_keyfile,
                 ssl_keyfile_password=ssl_keyfile_password,
                 url_path_prefix=url_path_prefix,
-                host=host,
+                respawn_failed_workers=respawn_failed_workers,
+                respawn_interval=respawn_interval,
+                workers_lifetime=workers_lifetime,
+                workers_kill_timeout=workers_kill_timeout,
+                reload=reload,
+                reload_paths=reload_paths,
+                reload_ignore_paths=reload_ignore_paths,
+                reload_ignore_dirs=reload_ignore_dirs,
+                reload_ignore_patterns=reload_ignore_patterns,
+                process_name=process_name,
+                pid_file=pid_file,
             )
         else:
             _run_granian(
                 env=env,
-                reload=reload,
-                reload_paths=reload_paths,
-                reload_ignore_dirs=reload_ignore_dirs,
-                reload_ignore_patterns=reload_ignore_patterns,
-                reload_ignore_paths=reload_ignore_paths,
                 port=port,
                 wc=workers,
-                workers_lifetime=workers_lifetime,
-                threads=threads,
+                host=host,
                 http=http,
+                blocking_threads=blocking_threads,
+                blocking_threads_idle_timeout=blocking_threads_idle_timeout,
+                runtime_threads=runtime_threads,
+                runtime_blocking_threads=runtime_blocking_threads,
+                runtime_mode=runtime_mode,
+                loop=loop,
+                task_impl=task_impl,
                 backlog=backlog,
                 backpressure=backpressure,
-                blocking_threads=blocking_threads,
-                respawn_failed_workers=respawn_failed_workers,
-                respawn_interval=respawn_interval,
-                workers_kill_timeout=workers_kill_timeout,
-                log_access_enabled=log_access_enabled,
-                log_access_fmt=log_access_fmt,
-                log_enabled=log_enabled,
                 http1_buffer_size=http1_buffer_size,
+                http1_header_read_timeout=http1_header_read_timeout,
                 http1_keep_alive=http1_keep_alive,
                 http1_pipeline_flush=http1_pipeline_flush,
                 http2_adaptive_window=http2_adaptive_window,
@@ -455,58 +542,75 @@ def run_command(
                 http2_max_frame_size=http2_max_frame_size,
                 http2_max_headers_size=http2_max_headers_size,
                 http2_max_send_buffer_size=http2_max_send_buffer_size,
-                threading_mode=threading_mode,
+                log_enabled=log_enabled,
+                log_access_enabled=log_access_enabled,
+                log_access_fmt=log_access_fmt,
+                log_level=log_level,
+                ssl_certificate=ssl_certificate,
+                ssl_keyfile=ssl_keyfile,
+                ssl_keyfile_password=ssl_keyfile_password,
+                url_path_prefix=url_path_prefix,
+                respawn_failed_workers=respawn_failed_workers,
+                respawn_interval=respawn_interval,
+                workers_lifetime=workers_lifetime,
+                workers_kill_timeout=workers_kill_timeout,
+                reload=reload,
+                reload_paths=reload_paths,
+                reload_ignore_paths=reload_ignore_paths,
+                reload_ignore_dirs=reload_ignore_dirs,
+                reload_ignore_patterns=reload_ignore_patterns,
                 process_name=process_name,
                 pid_file=pid_file,
-                ssl_keyfile=ssl_keyfile,
-                ssl_certificate=ssl_certificate,
-                url_path_prefix=url_path_prefix,
-                ssl_keyfile_password=ssl_keyfile_password,
-                host=host,
             )
 
 
 def _run_granian(
-    env: LitestarEnv,
+    env: "LitestarEnv",
     host: str,
     port: int,
+    http: "HTTPModes",
     wc: int,
-    threads: int,
-    http: HTTPModes,
+    blocking_threads: Optional[int],
+    blocking_threads_idle_timeout: int,
+    runtime_threads: int,
+    runtime_blocking_threads: Optional[int],
+    runtime_mode: "RuntimeModes",
+    loop: "Loops",
+    task_impl: "TaskImpl",
     backlog: int,
-    backpressure: int | None,
-    blocking_threads: int,
-    respawn_failed_workers: bool,
-    respawn_interval: float,
-    workers_kill_timeout: int | None,
-    log_access_enabled: bool,
-    log_access_fmt: str | None,
-    log_enabled: bool,
+    backpressure: Optional[int],
     http1_buffer_size: int,
+    http1_header_read_timeout: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
     http2_adaptive_window: bool,
     http2_initial_connection_window_size: int,
     http2_initial_stream_window_size: int,
-    http2_keep_alive_interval: int | None,
+    http2_keep_alive_interval: Optional[int],
     http2_keep_alive_timeout: int,
     http2_max_concurrent_streams: int,
     http2_max_frame_size: int,
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
-    workers_lifetime: int | None,
+    log_enabled: bool,
+    log_access_enabled: bool,
+    log_access_fmt: Optional[str],
+    log_level: "LogLevels",
+    ssl_certificate: Optional[Path],
+    ssl_keyfile: Optional[Path],
+    ssl_keyfile_password: Optional[str],
+    url_path_prefix: Optional[str],
+    respawn_failed_workers: bool,
+    respawn_interval: float,
+    workers_lifetime: Optional[int],
+    workers_kill_timeout: Optional[int],
     reload: bool,
-    reload_paths: list[Path] | None,
-    reload_ignore_dirs: list[str] | None,
-    reload_ignore_patterns: list[str] | None,
-    reload_ignore_paths: list[Path] | None,
-    process_name: str | None,
-    pid_file: Path | None,
-    ssl_keyfile: Path | None,
-    ssl_certificate: Path | None,
-    ssl_keyfile_password: str | None,
-    url_path_prefix: str | None,
+    reload_paths: Optional[list[Path]],
+    reload_ignore_dirs: Optional[list[str]],
+    reload_ignore_patterns: Optional[list[str]],
+    reload_ignore_paths: Optional[list[Path]],
+    process_name: Optional[str],
+    pid_file: Optional[Path],
 ) -> None:
     import signal
     from functools import partial
@@ -521,9 +625,14 @@ def _run_granian(
 
     if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
         if env.app.logging_config.loggers.get("_granian", None) is None:
-            env.app.logging_config.loggers.update(
-                {"_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False}},
-            )
+            LOGGING_CONFIG["loggers"] = {
+                "_granian": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
+                "granian.access": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
+            }
+            env.app.logging_config.loggers.update({
+                "_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
+                "granian.access": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
+            })
         env.app.logging_config.configure()
     excluded_fields = {"configure_root_logger", "incremental"}
     log_dictconfig = (
@@ -533,7 +642,7 @@ def _run_granian(
             if getattr(env.app.logging_config, _field.name) is not None and _field.name not in excluded_fields
         }
         if env.app.logging_config is not None
-        else None
+        else LOGGING_CONFIG
     )
     if log_dictconfig is not None:
         log_dictconfig["version"] = 1
@@ -553,6 +662,7 @@ def _run_granian(
 
     else:
         http1_settings = HTTP1Settings(
+            header_read_timeout=http1_header_read_timeout,
             keep_alive=http1_keep_alive,
             max_buffer_size=http1_buffer_size,
             pipeline_flush=http1_pipeline_flush,
@@ -561,41 +671,44 @@ def _run_granian(
 
     server = Granian(
         env.app_path,
-        factory=env.is_app_factory,
         address=host,
         port=port,
         interface=Interfaces.ASGI,
         workers=wc,
-        workers_lifetime=workers_lifetime,
-        threads=threads,
         blocking_threads=blocking_threads,
-        threading_mode=threading_mode,
-        loop=Loops.auto,
+        blocking_threads_idle_timeout=blocking_threads_idle_timeout,
+        runtime_threads=runtime_threads,
+        runtime_blocking_threads=runtime_blocking_threads,
+        runtime_mode=runtime_mode,
+        loop=loop,
+        task_impl=task_impl,
         http=http,
         websockets=http.value != HTTPModes.http2.value,
         backlog=backlog,
         backpressure=backpressure,
         http1_settings=http1_settings,
         http2_settings=http2_settings,
+        log_enabled=log_enabled,
+        log_access=log_access_enabled,
+        log_access_format=log_access_fmt,
+        log_level=log_level,
+        log_dictconfig=log_dictconfig,
         ssl_cert=ssl_certificate,
         ssl_key=ssl_keyfile,
         ssl_key_password=ssl_keyfile_password,
         url_path_prefix=url_path_prefix,
         respawn_failed_workers=respawn_failed_workers,
         respawn_interval=respawn_interval,
+        workers_lifetime=workers_lifetime,
         workers_kill_timeout=workers_kill_timeout,
+        factory=env.is_app_factory,
         reload=reload,
         reload_paths=reload_paths,
+        reload_ignore_paths=reload_ignore_paths,
         reload_ignore_dirs=reload_ignore_dirs,
         reload_ignore_patterns=reload_ignore_patterns,
-        reload_ignore_paths=reload_ignore_paths,
         process_name=process_name,
         pid_file=pid_file,
-        log_enabled=log_enabled,
-        log_access=log_access_enabled,
-        log_access_format=log_access_fmt,
-        log_level=LogLevels.info,
-        log_dictconfig=log_dictconfig,
     )
 
     # Set up signal handlers
@@ -605,8 +718,12 @@ def _run_granian(
     process_manager = ProcessManager(
         server=server, shutdown_callback=lambda: console.print("[yellow]Shutdown complete.[/]")
     )
+    try:
+        process_manager.run()
+    except FatalError:
+        import click
 
-    process_manager.run()
+        click.exceptions.Exit(1)
 
 
 def _convert_granian_args(args: dict[str, Any]) -> list[str]:
@@ -627,46 +744,52 @@ def _convert_granian_args(args: dict[str, Any]) -> list[str]:
 
 def _run_granian_in_subprocess(
     *,
-    env: LitestarEnv,
+    env: "LitestarEnv",
     host: str,
     port: int,
+    http: "HTTPModes",
     wc: int,
-    threads: int,
-    http: HTTPModes,
+    blocking_threads: Optional[int],
+    blocking_threads_idle_timeout: int,
+    runtime_threads: int,
+    runtime_blocking_threads: Optional[int],
+    runtime_mode: "RuntimeModes",
+    loop: "Loops",
+    task_impl: "TaskImpl",
     backlog: int,
-    backpressure: int | None,
-    blocking_threads: int,
-    respawn_failed_workers: bool,
-    respawn_interval: float,
-    log_access_enabled: bool,
-    log_access_fmt: str | None,
-    log_enabled: bool,
+    backpressure: Optional[int],
     http1_buffer_size: int,
+    http1_header_read_timeout: int,
     http1_keep_alive: bool,
     http1_pipeline_flush: bool,
     http2_adaptive_window: bool,
     http2_initial_connection_window_size: int,
     http2_initial_stream_window_size: int,
-    http2_keep_alive_interval: int | None,
+    http2_keep_alive_interval: Optional[int],
     http2_keep_alive_timeout: int,
     http2_max_concurrent_streams: int,
     http2_max_frame_size: int,
     http2_max_headers_size: int,
     http2_max_send_buffer_size: int,
-    threading_mode: ThreadModes,
-    workers_lifetime: int | None,
-    workers_kill_timeout: int | None,
+    log_enabled: bool,
+    log_access_enabled: bool,
+    log_access_fmt: Optional[str],
+    log_level: "LogLevels",
+    ssl_certificate: Optional[Path],
+    ssl_keyfile: Optional[Path],
+    ssl_keyfile_password: Optional[str],
+    url_path_prefix: Optional[str],
+    respawn_failed_workers: bool,
+    respawn_interval: float,
+    workers_lifetime: Optional[int],
+    workers_kill_timeout: Optional[int],
     reload: bool,
-    reload_paths: list[Path] | None,
-    reload_ignore_dirs: list[str] | None,
-    reload_ignore_patterns: list[str] | None,
-    reload_ignore_paths: list[Path] | None,
-    process_name: str | None,
-    pid_file: Path | None,
-    ssl_keyfile: Path | None,
-    ssl_certificate: Path | None,
-    ssl_keyfile_password: str | None,
-    url_path_prefix: str | None,
+    reload_paths: Optional[list[Path]],
+    reload_ignore_dirs: Optional[list[str]],
+    reload_ignore_patterns: Optional[list[str]],
+    reload_ignore_paths: Optional[list[Path]],
+    process_name: Optional[str],
+    pid_file: Optional[Path],
 ) -> None:
     process_args: dict[str, Any] = {
         "reload": reload,
@@ -674,14 +797,18 @@ def _run_granian_in_subprocess(
         "port": port,
         "interface": Interfaces.ASGI.value,
         "http": http.value,
-        "threads": threads,
         "workers": wc,
-        "threading-mode": threading_mode.value,
-        "blocking-threads": blocking_threads,
-        "loop": Loops.auto.value,
         "respawn-failed-workers": respawn_failed_workers,
         "respawn-interval": respawn_interval,
+        "blocking-threads": blocking_threads,
+        "blocking-threads-idle-timeout": blocking_threads_idle_timeout,
+        "runtime-threads": runtime_threads,
+        "runtime-blocking-threads": runtime_blocking_threads,
+        "runtime-mode": runtime_mode.value,
+        "loop": loop.value,
+        "task-impl": task_impl.value,
         "backlog": backlog,
+        "log-level": log_level.value,
     }
     if env.is_app_factory:
         process_args["factory"] = env.is_app_factory
@@ -706,8 +833,9 @@ def _run_granian_in_subprocess(
     if not log_enabled:
         process_args["no-log"] = True
     if http.value in {HTTPModes.http1.value, HTTPModes.auto.value}:
-        process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-buffer-size"] = http1_buffer_size
+        process_args["http1-header-read-timeout"] = http1_header_read_timeout
+        process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-pipeline-flush"] = http1_pipeline_flush
     if http.value == HTTPModes.http2.value:
         process_args["http2-adaptive-window"] = http2_adaptive_window
@@ -742,6 +870,8 @@ def _run_granian_in_subprocess(
     except KeyboardInterrupt:
         sys.exit(1)
     except FatalError:
+        sys.exit(1)
+    except Exception:  # noqa: BLE001
         sys.exit(1)
     finally:
         console.print("[yellow]Granian process stopped.[/]")

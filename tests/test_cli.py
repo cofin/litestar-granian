@@ -4,7 +4,7 @@ import textwrap
 from typing import TYPE_CHECKING
 
 import pytest
-from granian.constants import ThreadModes
+from granian.constants import RuntimeModes
 
 from litestar_granian.cli import run_command
 
@@ -132,6 +132,24 @@ class SampleController(Controller):
     async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
         return {"sample": "hello-world"}
 
+standard_lib_logging_config=LoggingConfig(
+    root={
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    handlers={
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "standard",
+        },
+        "queue_listener": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "standard",
+        },
+    },
+)
 
 app = Litestar(
     plugins=[
@@ -139,28 +157,12 @@ app = Litestar(
         StructlogPlugin(
             config=StructlogConfig(
                 structlog_logging_config=StructLoggingConfig(
-                    standard_lib_logging_config=LoggingConfig(
-                        root={
-                            "handlers": ["console"],
-                            "level": "INFO",
-                        },
-                        handlers={
-                            "console": {
-                                "class": "logging.StreamHandler",
-                                "level": "DEBUG",
-                                "formatter": "standard",
-                            },
-                            "queue_listener": {
-                                "class": "logging.StreamHandler",
-                                "level": "DEBUG",
-                                "formatter": "standard",
-                            },
-                        },
-                    )
+                    standard_lib_logging_config=standard_lib_logging_config
                 )
             )
         ),
     ],
+    logging_config=standard_lib_logging_config,
     route_handlers=[SampleController],
     on_startup=[dont_run_forever],
 )
@@ -183,7 +185,7 @@ app = Litestar(
 
 # Error case tests
 @pytest.mark.parametrize(
-    "reload, port, wc, threads, http, no_opt, backlog, threading_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
+    "reload, port, wc, runtime_threads, http, no_opt, backlog, runtime_mode, ssl_keyfile, ssl_certificate, url_path_prefix, host, debug,  pdb",
     [
         (
             False,
@@ -193,7 +195,7 @@ app = Litestar(
             "HTTP",
             False,
             1024,
-            ThreadModes.workers,
+            RuntimeModes.st,
             None,
             None,
             None,
@@ -209,7 +211,7 @@ app = Litestar(
             "HTTP2",
             True,
             2048,
-            "threads",
+            RuntimeModes.mt,
             "keyfile.pem",
             "certificate.pem",
             "/prefix",
@@ -224,11 +226,11 @@ def test_run_command_error_cases(
     reload: bool,
     port: int,
     wc: int,
-    threads: int,
+    runtime_threads: int,
     http: str,
     no_opt: bool,
     backlog: int,
-    threading_mode: str,
+    runtime_mode: int,
     ssl_keyfile: str,
     ssl_certificate: str,
     url_path_prefix: str,
@@ -244,15 +246,15 @@ def test_run_command_error_cases(
             str(port),
             "--wc",
             str(wc),
-            "--threads",
-            str(threads),
+            "--runtime-threads",
+            str(runtime_threads),
             "--http",
             http,
             "--no-opt" if no_opt else "",
             "--backlog",
             str(backlog),
-            "--threading-mode",
-            threading_mode,
+            "--runtime-mode",
+            str(runtime_mode),
             "--ssl-keyfile",
             ssl_keyfile,
             "--ssl-certificate",
