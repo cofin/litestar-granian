@@ -798,8 +798,6 @@ def _run_granian_in_subprocess(
         "interface": Interfaces.ASGI.value,
         "http": http.value,
         "workers": wc,
-        "respawn-failed-workers": respawn_failed_workers,
-        "respawn-interval": respawn_interval,
         "runtime-mode": runtime_mode.value,
         "loop": loop.value,
         "task-impl": task_impl.value,
@@ -808,6 +806,10 @@ def _run_granian_in_subprocess(
     }
     if env.is_app_factory:
         process_args["factory"] = env.is_app_factory
+    if respawn_failed_workers:
+        process_args["respawn-interval"] = respawn_interval
+    if respawn_interval:
+        process_args["respawn-interval"] = respawn_interval
     if reload_paths:
         process_args["reload-paths"] = (Path(d).absolute for d in reload_paths)
     if reload_ignore_dirs:
