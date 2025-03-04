@@ -799,7 +799,7 @@ def _run_granian_in_subprocess(
         "http": http.value,
         "workers": wc,
         "respawn-failed-workers": respawn_failed_workers,
-        "respawn-interval": respawn_interval,  
+        "respawn-interval": respawn_interval,
         "runtime-mode": runtime_mode.value,
         "loop": loop.value,
         "task-impl": task_impl.value,
