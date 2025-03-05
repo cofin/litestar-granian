@@ -23,7 +23,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Create virtual environment
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Install Pre-Commit hooks
         run: uv run pre-commit install
@@ -50,7 +50,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run mypy
         run: uv run mypy
@@ -67,7 +67,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run pyright
         run: uv run pyright
@@ -84,7 +84,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run slotscheck
         run: uv run slotscheck litestar_granian
@@ -107,7 +107,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
         run: uv run pytest tests
@@ -130,7 +130,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
         run: uv run pytest tests
@@ -152,7 +152,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
         run: uv run pytest tests
@@ -173,7 +173,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Build docs
         run: uv run make docs
