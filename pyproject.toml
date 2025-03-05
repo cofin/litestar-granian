@@ -116,6 +116,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:xdist.*",
   "ignore::DeprecationWarning:importlib._bootstrap",
   "ignore::DeprecationWarning:litestar.handlers.http_handlers.decorators",
+  "ignore::DeprecationWarning:multiprocessing.popen_fork",
 ]
 testpaths = ["tests"]
 
