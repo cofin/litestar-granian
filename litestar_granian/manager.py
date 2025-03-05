@@ -1,24 +1,23 @@
-from __future__ import annotations
-
 import signal
 import sys
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from litestar.cli._utils import (  # pyright: ignore[reportPrivateUsage]
     console,  # noqa: PLC2701
 )
 
 if TYPE_CHECKING:
-    from granian.server import Server as Granian  # type: ignore
+    from granian.server.mp import MPServer as MPGranian
+    from granian.server.mt import MTServer as MTGranian
 
 
 @dataclass
 class ProcessManager:
     """Manages the lifecycle of the Granian server process."""
 
-    server: Granian
-    shutdown_callback: Callable[[], None] | None = None
+    server: "Union[MPGranian, MTGranian]"
+    shutdown_callback: "Optional[Callable[[], None]]" = None
 
     def __post_init__(self) -> None:
         """Set up signal handlers after initialization."""

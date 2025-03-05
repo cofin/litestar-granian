@@ -39,7 +39,7 @@ from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskIm
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LOGGING_CONFIG, LogLevels
-from granian.server import Server as Granian  # type: ignore[attr-defined] # pyright: ignore[reportPrivateUsage]
+from granian.server import Server as Granian
 from litestar.cli._utils import (
     LitestarEnv,
     console,  # noqa: PLC2701
@@ -67,6 +67,8 @@ except ImportError:  # pragma: nocover
 
 
 if TYPE_CHECKING:
+    from granian.server.mp import MPServer as MPGranian
+    from granian.server.mt import MTServer as MTGranian
     from litestar import Litestar
     from litestar.cli._utils import LitestarEnv
 
@@ -615,7 +617,7 @@ def _run_granian(
     import signal
     from functools import partial
 
-    def handle_sigterm(server: Granian, signum: int, frame: Any) -> None:
+    def handle_sigterm(server: "Union[MPGranian, MTGranian]", signum: int, frame: Any) -> None:
         """Handle SIGTERM/SIGINT gracefully."""
         try:
             server.shutdown()  # type: ignore[no-untyped-call]
