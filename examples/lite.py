@@ -10,7 +10,7 @@ from litestar.plugins.structlog import StructlogPlugin
 
 from litestar_granian import GranianPlugin
 
-__all__ = ("SampleController", )
+__all__ = ("SampleController",)
 
 
 HERE = Path(__file__).parent
