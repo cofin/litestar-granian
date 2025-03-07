@@ -51,6 +51,8 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
+        os.kill(os.getpid(), signal.SIGINT)
+        os.kill(os.getpid(), signal.SIGTERM)
         os.kill(os.getpid(), signal.SIGKILL)
 
     asyncio.ensure_future(_fn())
@@ -122,6 +124,8 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
+        os.kill(os.getpid(), signal.SIGINT)
+        os.kill(os.getpid(), signal.SIGTERM)
         os.kill(os.getpid(), signal.SIGKILL)
 
     asyncio.ensure_future(_fn())
