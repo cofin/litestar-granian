@@ -10,6 +10,9 @@ from litestar.plugins.structlog import StructlogPlugin
 
 from litestar_granian import GranianPlugin
 
+__all__ = ("SampleController", )
+
+
 HERE = Path(__file__).parent
 
 
@@ -30,6 +33,4 @@ class SampleController(Controller):
         return {"sample": "hello-world"}
 
 
-app = Litestar(
-    plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController]
-)
+app = Litestar(plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController])
