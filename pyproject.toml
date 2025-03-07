@@ -44,8 +44,8 @@ Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["rloop"]
-uvloop = ["uvloop; platform_system != 'Windows'"]
+rloop = ["rloop; sys_platform != \"win32\""]
+uvloop = ["uvloop; sys_platform != \"win32\" and platform_python_implementation == \"CPython\""]
 
 ######################
 # Build & Versioning #

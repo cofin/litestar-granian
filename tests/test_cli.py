@@ -51,7 +51,7 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGTERM)
+        os.kill(os.getpid(), signal.SIGKILL)
 
     asyncio.ensure_future(_fn())
 
@@ -79,9 +79,9 @@ app = Litestar(
         extra_args.extend(["--no-subprocess"])
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
     if in_subprocess or reload:
-        assert "[INFO] Starting granian" in result.output or "Granian process stopped." in result.output
+        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
     else:
-        assert "- _granian - server - Starting granian" in result.output or "Granian process stopped." in result.output
+        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
 
 
 @pytest.mark.parametrize(
@@ -122,7 +122,7 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGTERM)
+        os.kill(os.getpid(), signal.SIGKILL)
 
     asyncio.ensure_future(_fn())
 
@@ -180,7 +180,7 @@ app = Litestar(
     else:
         extra_args.extend(["--no-subprocess"])
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
-    assert "[INFO] Shutting down granian" in result.output or "Granian process stopped." in result.output
+    assert "Shutting down granian" in result.output or "Granian workers stopped." in result.output
 
 
 # Error case tests
