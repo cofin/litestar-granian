@@ -32,7 +32,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.11.2"
+version = "0.12.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -44,8 +44,8 @@ Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["rloop"]
-uvloop = ["uvloop; platform_system != 'Windows'"]
+rloop = ["rloop; sys_platform != \"win32\""]
+uvloop = ["uvloop; sys_platform != \"win32\" and platform_python_implementation == \"CPython\""]
 
 ######################
 # Build & Versioning #
@@ -116,6 +116,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:xdist.*",
   "ignore::DeprecationWarning:importlib._bootstrap",
   "ignore::DeprecationWarning:litestar.handlers.http_handlers.decorators",
+  "ignore::DeprecationWarning:multiprocessing.popen_fork",
 ]
 testpaths = ["tests"]
 

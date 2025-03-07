@@ -1,11 +1,13 @@
 import enum
 import multiprocessing
 import os
+import signal
 import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+from time import sleep
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
 from litestar_granian.manager import ProcessManager
 
@@ -33,10 +35,8 @@ except ImportError:
     )
     from click import Path as ClickPath
     from click import option as click_option
-from granian._loops import loops  # noqa: PLC2701
 from granian.cli import _pretty_print_default  # noqa: PLC2701
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
-from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LOGGING_CONFIG, LogLevels
 from granian.server import Server as Granian
@@ -67,8 +67,6 @@ except ImportError:  # pragma: nocover
 
 
 if TYPE_CHECKING:
-    from granian.server.mp import MPServer as MPGranian
-    from granian.server.mt import MTServer as MTGranian
     from litestar import Litestar
     from litestar.cli._utils import LitestarEnv
 
@@ -369,9 +367,15 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
-    default=True,
+    default=False,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
+)
+@option(
+    "--use-litestar-logger/--no-litestar-logger",
+    "use_litestar_logger",
+    default=True,
+    help="Use the default Litestar Queue listener for logging",
 )
 def run_command(
     app: "Litestar",
@@ -424,6 +428,7 @@ def run_command(
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
+    use_litestar_logger: bool,
     ctx: Context,
 ) -> None:  # sourcery skip: low-code-quality
     """Run a Litestar app.
@@ -435,7 +440,6 @@ def run_command(
     instance.
     """
 
-    loops.get("auto")
     if reload:
         # code fails to fully reload unless this is set to true
         in_subprocess = True
@@ -614,36 +618,33 @@ def _run_granian(
     process_name: Optional[str],
     pid_file: Optional[Path],
 ) -> None:
-    import signal
-    from functools import partial
-
-    def handle_sigterm(server: "Union[MPGranian, MTGranian]", signum: int, frame: Any) -> None:
-        """Handle SIGTERM/SIGINT gracefully."""
-        try:
-            server.shutdown()  # type: ignore[no-untyped-call]
-        finally:
-            console.print("[yellow]Granian process stopped.[/]")
-            sys.exit(0)
-
-    if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig):
-        if env.app.logging_config.loggers.get("_granian", None) is None:
+    existing_logging_config = cast(
+        "Optional[LoggingConfig]",
+        env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
+        if env.app.logging_config is not None and hasattr(env.app.logging_config, "standard_lib_logging_config")
+        else env.app.logging_config
+        if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig)
+        else None,
+    )
+    if existing_logging_config is not None:
+        if existing_logging_config.loggers.get("_granian", None) is None:
             LOGGING_CONFIG["loggers"] = {
                 "_granian": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
                 "granian.access": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
             }
-            env.app.logging_config.loggers.update({
+            existing_logging_config.loggers.update({
                 "_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
                 "granian.access": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
             })
-        env.app.logging_config.configure()
+        existing_logging_config.configure()
     excluded_fields = {"configure_root_logger", "incremental"}
     log_dictconfig = (
         {
-            _field.name: getattr(env.app.logging_config, _field.name)
-            for _field in fields(env.app.logging_config)  # type: ignore[arg-type]
-            if getattr(env.app.logging_config, _field.name) is not None and _field.name not in excluded_fields
+            _field.name: getattr(existing_logging_config, _field.name)
+            for _field in fields(existing_logging_config)
+            if getattr(existing_logging_config, _field.name) is not None and _field.name not in excluded_fields
         }
-        if env.app.logging_config is not None
+        if existing_logging_config is not None
         else LOGGING_CONFIG
     )
     if log_dictconfig is not None:
@@ -670,9 +671,18 @@ def _run_granian(
             pipeline_flush=http1_pipeline_flush,
         )
         http2_settings = None
-
+    app_path = env.app_path
+    is_factory = env.is_app_factory
+    if reload:
+        module_path = app_path.split(":")[0]
+        loaded_modules = [m for m in sys.modules if m.startswith(module_path.split(".")[0])]
+        for m in loaded_modules:
+            del sys.modules[m]
+        if module_path in sys.modules:
+            del sys.modules[module_path]
+        del loaded_modules, env
     server = Granian(
-        env.app_path,
+        app_path,
         address=host,
         port=port,
         interface=Interfaces.ASGI,
@@ -703,7 +713,7 @@ def _run_granian(
         respawn_interval=respawn_interval,
         workers_lifetime=workers_lifetime,
         workers_kill_timeout=workers_kill_timeout,
-        factory=env.is_app_factory,
+        factory=is_factory,
         reload=reload,
         reload_paths=reload_paths,
         reload_ignore_paths=reload_ignore_paths,
@@ -713,19 +723,8 @@ def _run_granian(
         pid_file=pid_file,
     )
 
-    # Set up signal handlers
-    signal.signal(signal.SIGTERM, partial(handle_sigterm, server))
-    signal.signal(signal.SIGINT, partial(handle_sigterm, server))
-
-    process_manager = ProcessManager(
-        server=server, shutdown_callback=lambda: console.print("[yellow]Shutdown complete.[/]")
-    )
-    try:
-        process_manager.run()
-    except FatalError:
-        import click
-
-        click.exceptions.Exit(1)
+    process_manager = ProcessManager(server=server, console=console)
+    process_manager.run()
 
 
 def _convert_granian_args(args: dict[str, Any]) -> list[str]:
@@ -872,16 +871,20 @@ def _run_granian_in_subprocess(
         process_args["process-name"] = process_name
     if pid_file is not None:
         process_args["pid-file"] = Path(pid_file).absolute
+    command = [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)]
+
+    process = subprocess.Popen(command, restore_signals=False)
+
     try:
-        subprocess.run(
-            [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)],
-            check=True,
-        )
+        while process.poll() is None:
+            sleep(2)
+
     except KeyboardInterrupt:
-        sys.exit(1)
-    except FatalError:
-        sys.exit(1)
-    except Exception:  # noqa: BLE001
-        sys.exit(1)
+        process.send_signal(signal.SIGKILL)
     finally:
-        console.print("[yellow]Granian process stopped.[/]")
+        # Always ensure the process is reaped
+        process.poll()  # Check if the process has terminated
+        if process.returncode is None:
+            process.wait()  # Wait if it hasn't
+
+        console.print("[yellow]Granian workers stopped.[/]")

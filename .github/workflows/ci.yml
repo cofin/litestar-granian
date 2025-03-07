@@ -23,7 +23,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Create virtual environment
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Install Pre-Commit hooks
         run: uv run pre-commit install
@@ -50,7 +50,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run mypy
         run: uv run mypy
@@ -67,7 +67,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run pyright
         run: uv run pyright
@@ -84,7 +84,7 @@ jobs:
         run: uv python install 3.9
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Run slotscheck
         run: uv run slotscheck litestar_granian
@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -107,17 +107,17 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
-        run: uv run pytest -m ""
+        run: uv run pytest tests
 
   test-windows:
     runs-on: windows-latest
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -130,16 +130,16 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
-        run: uv run pytest -m ""
+        run: uv run pytest tests
   test-osx:
     runs-on: macos-latest
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -152,10 +152,10 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Test
-        run: uv run pytest -m ""
+        run: uv run pytest tests
 
   build-docs:
     needs:
@@ -173,7 +173,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --dev
 
       - name: Build docs
         run: uv run make docs
