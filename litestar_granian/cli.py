@@ -711,6 +711,8 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
     Returns:
         dict[str, Any]: The logging configuration dictionary
     """
+    if not use_litestar_logger:
+        return LOGGING_CONFIG
     LOGGING_CONFIG["formatters"] = {
         "generic": {
             "()": "logging.Formatter",
@@ -721,8 +723,6 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
             "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
         },
     }
-    if not use_litestar_logger:
-        return LOGGING_CONFIG
     existing_logging_config = cast(
         "Optional[LoggingConfig]",
         env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
