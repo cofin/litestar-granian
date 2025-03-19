@@ -1,6 +1,7 @@
 import enum
 import multiprocessing
 import os
+import platform
 import signal
 import subprocess  # noqa: S404
 import sys
@@ -374,8 +375,9 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--use-litestar-logger/--no-litestar-logger",
     "use_litestar_logger",
-    default=True,
+    default=False,
     help="Use the default Litestar Queue listener for logging",
+    envvar="LITESTAR_GRANIAN_USE_LITESTAR_LOGGER",
 )
 def run_command(
     app: "Litestar",
@@ -567,6 +569,7 @@ def run_command(
                 reload_ignore_patterns=reload_ignore_patterns,
                 process_name=process_name,
                 pid_file=pid_file,
+                use_litestar_logger=use_litestar_logger,
             )
 
 
@@ -617,38 +620,9 @@ def _run_granian(
     reload_ignore_paths: Optional[list[Path]],
     process_name: Optional[str],
     pid_file: Optional[Path],
+    use_litestar_logger: bool,
 ) -> None:
-    existing_logging_config = cast(
-        "Optional[LoggingConfig]",
-        env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
-        if env.app.logging_config is not None and hasattr(env.app.logging_config, "standard_lib_logging_config")
-        else env.app.logging_config
-        if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig)
-        else None,
-    )
-    if existing_logging_config is not None:
-        if existing_logging_config.loggers.get("_granian", None) is None:
-            LOGGING_CONFIG["loggers"] = {
-                "_granian": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
-                "granian.access": {"handlers": ["queue_listener"], "level": "INFO", "propagate": False},
-            }
-            existing_logging_config.loggers.update({
-                "_granian": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
-                "granian.access": {"level": "INFO", "handlers": ["queue_listener"], "propagate": False},
-            })
-        existing_logging_config.configure()
-    excluded_fields = {"configure_root_logger", "incremental"}
-    log_dictconfig = (
-        {
-            _field.name: getattr(existing_logging_config, _field.name)
-            for _field in fields(existing_logging_config)
-            if getattr(existing_logging_config, _field.name) is not None and _field.name not in excluded_fields
-        }
-        if existing_logging_config is not None
-        else LOGGING_CONFIG
-    )
-    if log_dictconfig is not None:
-        log_dictconfig["version"] = 1
+    log_dictconfig = _get_logging_config(env, use_litestar_logger)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
@@ -725,6 +699,71 @@ def _run_granian(
 
     process_manager = ProcessManager(server=server, console=console)
     process_manager.run()
+
+
+def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[str, Any]:
+    """Get the logging config for the Granian server.
+
+    Args:
+        env: The Litestar environment
+        use_litestar_logger: Whether to use the Litestar logger
+
+    Returns:
+        dict[str, Any]: The logging configuration dictionary
+    """
+    if not use_litestar_logger:
+        return LOGGING_CONFIG
+    LOGGING_CONFIG["formatters"] = {
+        "generic": {
+            "()": "logging.Formatter",
+            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
+        },
+        "access": {
+            "()": "logging.Formatter",
+            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
+        },
+    }
+    existing_logging_config = cast(
+        "Optional[LoggingConfig]",
+        env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
+        if env.app.logging_config is not None and hasattr(env.app.logging_config, "standard_lib_logging_config")
+        else env.app.logging_config
+        if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig)
+        else None,
+    )
+    if existing_logging_config is not None:
+        if existing_logging_config.loggers.get("_granian", None) is None:
+            LOGGING_CONFIG["loggers"] = {
+                "_granian": {"handlers": ["console"], "level": "INFO", "propagate": False},
+                "granian.access": {"handlers": ["console"], "level": "INFO", "propagate": False},
+            }
+            existing_logging_config.loggers.update({
+                "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
+                "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
+            })
+        if existing_logging_config.formatters.get("generic", None) is None:
+            existing_logging_config.formatters.update(
+                {
+                    "generic": existing_logging_config.formatters.get(
+                        "standard",
+                        {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"},
+                    ),
+                },
+            )
+        existing_logging_config.configure()
+    excluded_fields = {"configure_root_logger", "incremental"}
+    log_dictconfig = (
+        {
+            _field.name: getattr(existing_logging_config, _field.name)
+            for _field in fields(existing_logging_config)
+            if getattr(existing_logging_config, _field.name) is not None and _field.name not in excluded_fields
+        }
+        if existing_logging_config is not None
+        else LOGGING_CONFIG
+    )
+    if log_dictconfig is not None:
+        log_dictconfig["version"] = 1
+    return log_dictconfig
 
 
 def _convert_granian_args(args: dict[str, Any]) -> list[str]:
@@ -878,9 +917,11 @@ def _run_granian_in_subprocess(
     try:
         while process.poll() is None:
             sleep(2)
-
     except KeyboardInterrupt:
-        process.send_signal(signal.SIGKILL)
+        if platform.system() == "Windows":
+            process.send_signal(signal.CTRL_C_EVENT)  # type: ignore[attr-defined]
+        else:
+            process.send_signal(signal.SIGINT)
     finally:
         # Always ensure the process is reaped
         process.poll()  # Check if the process has terminated

@@ -25,6 +25,7 @@ dependencies = [
   "litestar>=2.7.0",
   "granian[reload,pname]>=2.0.1",
   "httptools",
+  "websockets",
 ]
 description = "Granian plugin for Litestar"
 keywords = ["litestar", "granian", "asgi"]
