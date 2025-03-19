@@ -716,6 +716,10 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
             "()": "logging.Formatter",
             "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
         },
+        "access": {
+            "()": "logging.Formatter",
+            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
+        },
     }
     if not use_litestar_logger:
         return LOGGING_CONFIG
