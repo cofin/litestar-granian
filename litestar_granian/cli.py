@@ -374,7 +374,7 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--use-litestar-logger/--no-litestar-logger",
     "use_litestar_logger",
-    default=True,
+    default=False,
     help="Use the default Litestar Queue listener for logging",
     envvar="LITESTAR_GRANIAN_USE_LITESTAR_LOGGER",
 )
@@ -906,9 +906,8 @@ def _run_granian_in_subprocess(
     try:
         while process.poll() is None:
             sleep(2)
-
     except KeyboardInterrupt:
-        process.send_signal(signal.SIGKILL)
+         process.send_signal(signal.CTRL_C_EVENT) # type: ignore[attr-defined]
     finally:
         # Always ensure the process is reaped
         process.poll()  # Check if the process has terminated
