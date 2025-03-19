@@ -22,7 +22,7 @@ classifiers = [
   "Intended Audience :: System Administrators",
 ]
 dependencies = [
-  "litestar>=2.7.0",
+  "litestar>=2.15.0",
   "granian[reload,pname]>=2.0.1",
   "httptools",
 ]

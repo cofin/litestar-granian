@@ -567,6 +567,7 @@ def run_command(
                 reload_ignore_patterns=reload_ignore_patterns,
                 process_name=process_name,
                 pid_file=pid_file,
+                use_litestar_logger=use_litestar_logger,
             )
 
 
@@ -617,7 +618,9 @@ def _run_granian(
     reload_ignore_paths: Optional[list[Path]],
     process_name: Optional[str],
     pid_file: Optional[Path],
+    use_litestar_logger: bool,
 ) -> None:
+    original_logging_config = LOGGING_CONFIG
     existing_logging_config = cast(
         "Optional[LoggingConfig]",
         env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
@@ -649,6 +652,8 @@ def _run_granian(
     )
     if log_dictconfig is not None:
         log_dictconfig["version"] = 1
+    if not use_litestar_logger:
+        log_dictconfig = original_logging_config
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
