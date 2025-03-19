@@ -1,7 +1,8 @@
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Optional, TypeGuard
+from typing import TYPE_CHECKING, Optional
 
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from typing_extensions import TypeGuard
 
 if TYPE_CHECKING:
     try:
@@ -100,4 +101,4 @@ def is_structlog_plugin(plugin: "InitPluginProtocol") -> TypeGuard["StructlogPlu
 def is_logging_config(config: "Optional[BaseLoggingConfig]") -> TypeGuard["LoggingConfig"]:
     from litestar.logging.config import LoggingConfig
 
-    return isinstance(config, LoggingConfig)
+    return config is not None and isinstance(config, LoggingConfig)
