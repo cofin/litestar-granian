@@ -33,7 +33,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.12.0"
+version = "0.12.1"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
