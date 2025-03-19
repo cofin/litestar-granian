@@ -1,6 +1,7 @@
 import enum
 import multiprocessing
 import os
+import platform
 import signal
 import subprocess  # noqa: S404
 import sys
@@ -367,7 +368,7 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
-    default=True,
+    default=False,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
@@ -710,6 +711,11 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
     Returns:
         dict[str, Any]: The logging configuration dictionary
     """
+    LOGGING_CONFIG["formatters"] = {
+        "generic": {
+            "format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
+        },
+    }
     if not use_litestar_logger:
         return LOGGING_CONFIG
     existing_logging_config = cast(
@@ -907,7 +913,10 @@ def _run_granian_in_subprocess(
         while process.poll() is None:
             sleep(2)
     except KeyboardInterrupt:
-         process.send_signal(signal.CTRL_C_EVENT) # type: ignore[attr-defined]
+        if platform.system() == "Windows":
+            process.send_signal(signal.CTRL_C_EVENT)  # type: ignore[attr-defined]
+        else:
+            process.send_signal(signal.SIGINT)
     finally:
         # Always ensure the process is reaped
         process.poll()  # Check if the process has terminated
