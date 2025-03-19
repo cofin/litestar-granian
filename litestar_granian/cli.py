@@ -367,14 +367,14 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
-    default=False,
+    default=True,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
 @option(
     "--use-litestar-logger/--no-litestar-logger",
     "use_litestar_logger",
-    default=True,
+    default=False,
     help="Use the default Litestar Queue listener for logging",
 )
 def run_command(
