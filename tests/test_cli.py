@@ -10,7 +10,7 @@ from litestar_granian.cli import run_command
 
 if TYPE_CHECKING:
     from click.testing import CliRunner
-    from litestar.cli._utils import LitestarGroup
+    from litestar.cli._utils import LitestarGroup  # pyright: ignore[reportPrivateImportUsage]
 
     from tests.conftest import CreateAppFileFixture
 

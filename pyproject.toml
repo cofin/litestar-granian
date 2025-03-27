@@ -33,7 +33,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.12.1"
+version = "0.12.2"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -248,6 +248,7 @@ lint.ignore = [
   "PLR0917",
   "CPY001",  # copywrite check
   "FA100", # future annotations check
+  "PLC2701",
 ]
 lint.select = ["ALL"]
 # Allow unused variables when underscore-prefixed.

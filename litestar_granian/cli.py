@@ -36,18 +36,18 @@ except ImportError:
     )
     from click import Path as ClickPath
     from click import option as click_option
-from granian.cli import _pretty_print_default  # noqa: PLC2701
+from granian.cli import _pretty_print_default
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LOGGING_CONFIG, LogLevels
 from granian.server import Server as Granian
 from litestar.cli._utils import (
-    LitestarEnv,
-    console,  # noqa: PLC2701
-    create_ssl_files,  # noqa: PLC2701
-    show_app_info,  # noqa: PLC2701
+    LitestarEnv,  # pyright: ignore[reportPrivateImportUsage]
+    console,  # pyright: ignore[reportPrivateImportUsage]
+    create_ssl_files,  # pyright: ignore[reportPrivateImportUsage]
+    show_app_info,  # pyright: ignore[reportPrivateImportUsage]
 )
-from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]  # noqa: PLC2701
+from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 from litestar.logging import LoggingConfig
 
 try:
@@ -69,7 +69,7 @@ except ImportError:  # pragma: nocover
 
 if TYPE_CHECKING:
     from litestar import Litestar
-    from litestar.cli._utils import LitestarEnv
+    from litestar.cli._utils import LitestarEnv  # pyright: ignore[reportPrivateImportUsage]
 
 
 class EnumType(Choice):
@@ -368,7 +368,7 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
-    default=False,
+    default=True,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
