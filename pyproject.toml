@@ -248,6 +248,7 @@ lint.ignore = [
   "PLR0917",
   "CPY001",  # copywrite check
   "FA100", # future annotations check
+  "PLC2701",
 ]
 lint.select = ["ALL"]
 # Allow unused variables when underscore-prefixed.

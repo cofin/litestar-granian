@@ -10,15 +10,15 @@ from typing import TYPE_CHECKING, Callable, Protocol, cast
 import pytest
 from click.testing import CliRunner
 from litestar.cli._utils import (
-    LitestarGroup,
-    _path_to_dotted_path,  # noqa: PLC2701
+    LitestarGroup,  # pyright: ignore[reportPrivateImportUsage]
+    _path_to_dotted_path,  # pyright: ignore[reportPrivateImportUsage]
 )
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from unittest.mock import MagicMock
 
-    from _pytest.fixtures import FixtureRequest
+    from _pytest.fixtures import FixtureRequest  # pyright: ignore[reportPrivateImportUsage]
     from pytest_mock import MockerFixture
 
 pytestmark = pytest.mark.anyio
@@ -66,7 +66,7 @@ def reset_litestar_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def patch_autodiscovery_paths(request: FixtureRequest) -> Callable[[list[str]], None]:
     def patcher(paths: list[str]) -> None:
-        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # noqa: PLC2701
+        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # pyright: ignore[reportPrivateImportUsage]
 
         old_paths = AUTODISCOVERY_FILE_NAMES[::]
         AUTODISCOVERY_FILE_NAMES[:] = paths
