@@ -6,6 +6,7 @@ import signal
 import subprocess  # noqa: S404
 import sys
 from dataclasses import fields
+from importlib.util import find_spec
 from pathlib import Path
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
@@ -70,6 +71,9 @@ except ImportError:  # pragma: nocover
 if TYPE_CHECKING:
     from litestar import Litestar
     from litestar.cli._utils import LitestarEnv  # pyright: ignore[reportPrivateImportUsage]
+
+UVLOOP_INSTALLED = find_spec("uvloop") is not None
+RLOOP_INSTALLED = find_spec("rloop") is not None
 
 
 class EnumType(Choice):
@@ -156,7 +160,12 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     default=RuntimeModes.st,
     help="Runtime mode to use (single/multi threaded)",
 )
-@option("--loop", type=EnumType(Loops), default=Loops.auto, help="Event loop implementation")  # type: ignore[arg-type]
+@option(
+    "--loop",
+    type=EnumType(Loops),  # type: ignore[arg-type]
+    default=Loops.uvloop if UVLOOP_INSTALLED else Loops.rloop if RLOOP_INSTALLED else Loops.auto,
+    help="Event loop implementation",
+)
 @option(
     "--task-impl",
     type=EnumType(TaskImpl),  # type: ignore[arg-type]
@@ -469,7 +478,13 @@ def run_command(
         ssl_keyfile = ssl_keyfile or Path(key) if key is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     if not quiet_console and isatty():
-        console.rule("[yellow]Starting [blue]Granian[/] server process[/]", align="left")
+        if UVLOOP_INSTALLED and loop in {Loops.uvloop, Loops.auto}:
+            msg = "Starting [blue]Granian[/] server process with [green]uvloop[/]"
+        elif RLOOP_INSTALLED and loop in {Loops.rloop, Loops.auto}:
+            msg = "Starting [blue]Granian[/] server process with [green]rloop[/]"
+        else:
+            msg = "Starting [blue]Granian[/] server process"
+        console.rule(msg, align="left")
         show_app_info(env.app)
     with _server_lifespan(env.app):
         if in_subprocess:
@@ -916,16 +931,20 @@ def _run_granian_in_subprocess(
 
     try:
         while process.poll() is None:
-            sleep(2)
+            sleep(1)
     except KeyboardInterrupt:
         if platform.system() == "Windows":
             process.send_signal(signal.CTRL_C_EVENT)  # type: ignore[attr-defined]
         else:
-            process.send_signal(signal.SIGINT)
+            process.send_signal(signal.SIGTERM)
     finally:
         # Always ensure the process is reaped
-        process.poll()  # Check if the process has terminated
-        if process.returncode is None:
-            process.wait()  # Wait if it hasn't
-
+        try:
+            process.poll()  # Check if the process has terminated
+            if process.returncode is None:
+                process.wait()  # Wait if it hasn't
+        except KeyboardInterrupt:
+            if platform.system() != "Windows":
+                process.send_signal(signal.SIGKILL)
+            process.kill()
         console.print("[yellow]Granian workers stopped.[/]")
