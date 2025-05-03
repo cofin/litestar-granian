@@ -20,10 +20,14 @@ class ProcessManager:
         """Run the server with proper signal handling."""
         try:
             self.server.serve()
+        except KeyboardInterrupt:
+            self.console.print("[yellow]Granian workers stopped.[/]")
+            self.server.shutdown()  # type: ignore[no-untyped-call]
         except FatalError:
             import click
 
             click.exceptions.Exit(1)
         finally:
             self.console.print("[yellow]Granian workers stopped.[/]")
+            self.server.shutdown()  # type: ignore[no-untyped-call]
             sys.exit(0)
