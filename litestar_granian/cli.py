@@ -11,7 +11,21 @@ from pathlib import Path
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
-from litestar_granian.manager import ProcessManager
+from granian.cli import _pretty_print_default
+from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
+from granian.errors import FatalError
+from granian.http import HTTP1Settings, HTTP2Settings
+from granian.log import LOGGING_CONFIG, LogLevels
+from granian.server import Server as Granian
+from litestar.cli._utils import (
+    LitestarEnv,  # pyright: ignore[reportPrivateImportUsage]
+    console,  # pyright: ignore[reportPrivateImportUsage]
+    create_ssl_files,  # pyright: ignore[reportPrivateImportUsage]
+    isatty,  # type: ignore[attr-defined,unused-ignore]
+    show_app_info,  # pyright: ignore[reportPrivateImportUsage]
+)
+from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
+from litestar.logging import LoggingConfig
 
 try:
     from rich_click import (
@@ -37,35 +51,6 @@ except ImportError:
     )
     from click import Path as ClickPath
     from click import option as click_option
-from granian.cli import _pretty_print_default
-from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
-from granian.http import HTTP1Settings, HTTP2Settings
-from granian.log import LOGGING_CONFIG, LogLevels
-from granian.server import Server as Granian
-from litestar.cli._utils import (
-    LitestarEnv,  # pyright: ignore[reportPrivateImportUsage]
-    console,  # pyright: ignore[reportPrivateImportUsage]
-    create_ssl_files,  # pyright: ignore[reportPrivateImportUsage]
-    show_app_info,  # pyright: ignore[reportPrivateImportUsage]
-)
-from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
-from litestar.logging import LoggingConfig
-
-try:
-    from litestar.cli._utils import isatty  # type: ignore[attr-defined,unused-ignore]
-except ImportError:  # pragma: nocover
-
-    def isatty() -> bool:  # pragma: nocover
-        """Detect if a terminal is TTY enabled.
-
-        This was added in Litestar 2.8 and is back-ported for compatibility.
-
-        This is a convenience wrapper around the built in system methods.  This allows for easier testing of TTY/non-TTY modes.
-
-        Returns:
-            bool - True of the terminal is TTY enabled
-        """
-        return sys.stdout.isatty()
 
 
 if TYPE_CHECKING:
@@ -325,6 +310,7 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     "--workers-kill-timeout",
     type=IntRange(1, 1800),
     help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
+    default=5,
     show_default="disabled",
 )
 # Development & Debug options
@@ -712,8 +698,13 @@ def _run_granian(
         pid_file=pid_file,
     )
 
-    process_manager = ProcessManager(server=server, console=console)
-    process_manager.run()
+    try:
+        server.serve()
+    except FatalError as e:
+        console.print(f"[red]Fatal Granian error: {e}[/]")
+        sys.exit(1)
+    else:
+        console.print("[yellow]Granian workers stopped[/]")
 
 
 def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[str, Any]:
