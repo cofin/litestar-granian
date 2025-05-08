@@ -78,7 +78,7 @@ app = Litestar(
     elif in_subprocess:
         extra_args.extend(["--in-subprocess"])
     else:
-        extra_args.extend(["--no-subprocess"])
+        extra_args.extend(["--no-subprocess", "--use-litestar-logger"])
     result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
     if in_subprocess or reload:
         assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
