@@ -29,7 +29,6 @@ class SampleController(Controller):
 
     @get(path="/sample")
     async def sample_route(self) -> dict[str, str]:
-        """Sample Route."""
         return {"sample": "hello-world"}
 
 

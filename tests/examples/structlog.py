@@ -23,8 +23,7 @@ async def dont_run_forever() -> None:
 
 class SampleController(Controller):
     @get(path="/sample")
-    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
-        """Sample Route."""
+    async def sample_route(self) -> dict[str, str]:
         return {"sample": "hello-world"}
 
 
