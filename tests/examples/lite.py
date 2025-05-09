@@ -1,4 +1,3 @@
-# ruff: noqa: PLR6301
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,7 +28,6 @@ class SampleController(Controller):
 
     @get(path="/sample")
     async def sample_route(self) -> dict[str, str]:
-        """Sample Route."""
         return {"sample": "hello-world"}
 
 

@@ -4,7 +4,7 @@ from litestar import Controller, Litestar, get
 
 from litestar_granian import GranianPlugin
 
-__all__ = ("SampleController", )
+__all__ = ("SampleController",)
 
 
 class SampleController(Controller):

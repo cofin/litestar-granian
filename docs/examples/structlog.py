@@ -5,7 +5,7 @@ from litestar.plugins.structlog import StructlogPlugin
 
 from litestar_granian import GranianPlugin
 
-__all__ = ("SampleController", )
+__all__ = ("SampleController",)
 
 
 class SampleController(Controller):
@@ -15,6 +15,4 @@ class SampleController(Controller):
         return {"sample": "hello-world"}
 
 
-app = Litestar(
-    plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController]
-)
+app = Litestar(plugins=[GranianPlugin(), StructlogPlugin()], route_handlers=[SampleController])
