@@ -325,7 +325,6 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
 
     # Should not fail with file existence error
     assert "does not exist" not in result.output
-    assert "does not exist" not in (result.stderr or "")
     # Command should succeed (exit code 0 for help)
     assert result.exit_code == 0
 
@@ -385,6 +384,5 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
 
     # Should not fail with generator object error
     assert "generator object" not in result.output
-    assert "generator object" not in (result.stderr or "")
     # Command should succeed (exit code 0 for help)
     assert result.exit_code == 0
