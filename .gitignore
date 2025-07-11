@@ -32,3 +32,7 @@ target/
 /docs/_build/
 coverage.*
 setup.py
+.todos
+CLAUDE.md
+.claude
+.tmp

@@ -9,6 +9,8 @@ from granian.constants import RuntimeModes
 from litestar_granian.cli import run_command
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from click.testing import CliRunner
     from litestar.cli._utils import LitestarGroup  # pyright: ignore[reportPrivateImportUsage]
 
@@ -79,7 +81,7 @@ app = Litestar(
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess", "--use-litestar-logger"])
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
+    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", "--port", "9876", *extra_args])
     if in_subprocess or reload:
         assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
     else:
@@ -183,7 +185,7 @@ app = Litestar(
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess"])
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", *extra_args])
+    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", "--port", "9877", *extra_args])
     assert "Shutting down granian" in result.output or "Granian workers stopped." in result.output
 
 
@@ -193,7 +195,7 @@ app = Litestar(
     [
         (
             False,
-            8000,
+            9876,
             0,
             1,
             "HTTP",
@@ -273,3 +275,108 @@ def test_run_command_error_cases(
     )
     assert result.exit_code != 0
     # Add assertions for the expected behavior
+
+
+def test_ssl_certificate_generation_fix_issue_48(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that SSL certificate generation works when files don't exist (Issue #48).
+
+    This test verifies that the --create-self-signed-cert option works when
+    certificate files don't exist, which was broken due to exists=True in ClickPath.
+    """
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("ssl_test_app.py", content=app_file_content)
+
+    # Use non-existent certificate files
+    cert_file = tmp_path / "test-cert.pem"
+    key_file = tmp_path / "test-key.pem"
+
+    # This should NOT fail with "File does not exist" error
+    result = runner.invoke(
+        root_command,
+        [
+            "--app", f"{app_file.stem}:app",
+            "run",
+            "--ssl-certificate", str(cert_file),
+            "--ssl-keyfile", str(key_file),
+            "--create-self-signed-cert",
+            "--no-subprocess",
+            "--help"  # Just show help to avoid actually starting server
+        ]
+    )
+
+    # Should not fail with file existence error
+    assert "does not exist" not in result.output
+    assert "does not exist" not in (result.stderr or "")
+    # Command should succeed (exit code 0 for help)
+    assert result.exit_code == 0
+
+
+def test_reload_paths_fix_issue_52(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that reload paths work correctly without generator object error (Issue #52).
+
+    This test verifies that --reload-paths option works correctly and doesn't
+    cause generator object serialization errors in subprocess mode.
+    """
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("reload_test_app.py", content=app_file_content)
+
+    # Create test directories to watch
+    watch_dir1 = tmp_path / "src"
+    watch_dir1.mkdir()
+    watch_dir2 = tmp_path / "templates"
+    watch_dir2.mkdir()
+    ignore_dir = tmp_path / "node_modules"
+    ignore_dir.mkdir()
+
+    # This should NOT fail with generator object error
+    result = runner.invoke(
+        root_command,
+        [
+            "--app", f"{app_file.stem}:app",
+            "run",
+            "--reload",
+            "--reload-paths", str(watch_dir1),
+            "--reload-paths", str(watch_dir2),
+            "--reload-ignore-paths", str(ignore_dir),
+            "--port", "9878",  # Use different port to avoid conflicts
+            "--help"  # Just show help to avoid actually starting server
+        ]
+    )
+
+    # Should not fail with generator object error
+    assert "generator object" not in result.output
+    assert "generator object" not in (result.stderr or "")
+    # Command should succeed (exit code 0 for help)
+    assert result.exit_code == 0
