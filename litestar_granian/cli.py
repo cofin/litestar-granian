@@ -268,14 +268,14 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # SSL configuration
 @option(
     "--ssl-certificate",
-    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
+    type=ClickPath(file_okay=True, exists=False, dir_okay=False, readable=True),
     help="SSL certificate file",
     default=None,
     show_default=False,
 )
 @option(
     "--ssl-keyfile",
-    type=ClickPath(file_okay=True, exists=True, dir_okay=False, readable=True),
+    type=ClickPath(file_okay=True, exists=False, dir_okay=False, readable=True),
     help="SSL key file",
     default=None,
     show_default=False,
@@ -857,13 +857,13 @@ def _run_granian_in_subprocess(
     if respawn_interval:
         process_args["respawn-interval"] = respawn_interval
     if reload_paths:
-        process_args["reload-paths"] = [Path(d).absolute() for d in reload_paths]
+        process_args["reload-paths"] = [str(Path(d).absolute()) for d in reload_paths]
     if reload_ignore_dirs:
         process_args["reload-ignore-dirs"] = reload_ignore_dirs
     if reload_ignore_patterns:
         process_args["reload-ignore-patterns"] = reload_ignore_patterns
     if reload_ignore_paths:
-        process_args["reload-ignore-paths"] = [Path(d).absolute() for d in reload_ignore_paths]
+        process_args["reload-ignore-paths"] = [str(Path(d).absolute()) for d in reload_ignore_paths]
     if backpressure:
         process_args["backpressure"] = backpressure
     if workers_lifetime:
