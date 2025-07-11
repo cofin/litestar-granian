@@ -310,14 +310,17 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     result = runner.invoke(
         root_command,
         [
-            "--app", f"{app_file.stem}:app",
+            "--app",
+            f"{app_file.stem}:app",
             "run",
-            "--ssl-certificate", str(cert_file),
-            "--ssl-keyfile", str(key_file),
+            "--ssl-certificate",
+            str(cert_file),
+            "--ssl-keyfile",
+            str(key_file),
             "--create-self-signed-cert",
             "--no-subprocess",
-            "--help"  # Just show help to avoid actually starting server
-        ]
+            "--help",  # Just show help to avoid actually starting server
+        ],
     )
 
     # Should not fail with file existence error
@@ -364,15 +367,20 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     result = runner.invoke(
         root_command,
         [
-            "--app", f"{app_file.stem}:app",
+            "--app",
+            f"{app_file.stem}:app",
             "run",
             "--reload",
-            "--reload-paths", str(watch_dir1),
-            "--reload-paths", str(watch_dir2),
-            "--reload-ignore-paths", str(ignore_dir),
-            "--port", "9878",  # Use different port to avoid conflicts
-            "--help"  # Just show help to avoid actually starting server
-        ]
+            "--reload-paths",
+            str(watch_dir1),
+            "--reload-paths",
+            str(watch_dir2),
+            "--reload-ignore-paths",
+            str(ignore_dir),
+            "--port",
+            "9878",  # Use different port to avoid conflicts
+            "--help",  # Just show help to avoid actually starting server
+        ],
     )
 
     # Should not fail with generator object error
