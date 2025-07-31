@@ -11,7 +11,7 @@ from pathlib import Path
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
-from granian.cli import _pretty_print_default
+from granian.cli import Duration, _pretty_print_default
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
@@ -107,6 +107,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # Server configuration
 @option("-H", "--host", help="Host address to bind to", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option("-p", "--port", help="Port to bind to", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
+@option(
+    "--uds",
+    type=ClickPath(exists=False, writable=True),
+    help="Unix Domain Socket path (experimental)",
+)
 @option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
 @option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
@@ -303,8 +308,8 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--workers-lifetime",
-    type=IntRange(60),
-    help="The maximum amount of time in seconds a worker will be kept alive before respawn",
+    type=Duration(60),
+    help="The maximum amount of time a worker will be kept alive before respawn (supports human-readable format like '6h', '30m')",
 )
 @option(
     "--workers-kill-timeout",
@@ -312,6 +317,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
     default=5,
     show_default="disabled",
+)
+@option(
+    "--workers-max-rss",
+    type=IntRange(1),
+    help="The maximum amount of memory (in MiB) a worker can consume before respawn",
 )
 # Development & Debug options
 @option(
@@ -378,6 +388,7 @@ def run_command(
     app: "Litestar",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -415,6 +426,7 @@ def run_command(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -514,6 +526,8 @@ def run_command(
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
+                workers_max_rss=workers_max_rss,
+                uds=uds,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
@@ -563,6 +577,8 @@ def run_command(
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
+                workers_max_rss=workers_max_rss,
+                uds=uds,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
@@ -578,6 +594,7 @@ def _run_granian(
     env: "LitestarEnv",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -614,6 +631,7 @@ def _run_granian(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -688,6 +706,8 @@ def _run_granian(
         respawn_interval=respawn_interval,
         workers_lifetime=workers_lifetime,
         workers_kill_timeout=workers_kill_timeout,
+        workers_max_rss=workers_max_rss,
+        uds=Path(uds) if uds else None,
         factory=is_factory,
         reload=reload,
         reload_paths=reload_paths,
@@ -793,6 +813,7 @@ def _run_granian_in_subprocess(
     env: "LitestarEnv",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -829,6 +850,7 @@ def _run_granian_in_subprocess(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -874,6 +896,10 @@ def _run_granian_in_subprocess(
         process_args["access-log-fmt"] = log_access_fmt
     if workers_kill_timeout:
         process_args["workers-kill-timeout"] = workers_kill_timeout
+    if workers_max_rss:
+        process_args["workers-max-rss"] = workers_max_rss
+    if uds:
+        process_args["uds"] = str(Path(uds).absolute())
     if blocking_threads:
         process_args["blocking-threads"] = blocking_threads
     if blocking_threads_idle_timeout:
