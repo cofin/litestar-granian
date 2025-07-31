@@ -386,3 +386,410 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     assert "generator object" not in result.output
     # Command should succeed (exit code 0 for help)
     assert result.exit_code == 0
+
+
+# Comprehensive tests for Granian 2.5 new parameters
+def test_workers_max_rss_parameter(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+) -> None:
+    """Test that --workers-max-rss parameter is accepted and validated."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("workers_rss_test_app.py", content=app_file_content)
+
+    # Test valid workers-max-rss value
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-max-rss",
+            "512",
+            "--port",
+            "9880",
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # Parameter should be accepted without errors
+    assert result.exit_code == 0
+
+    # Test invalid workers-max-rss value (should fail)
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-max-rss",
+            "0",  # Invalid value - must be >= 1
+            "--port",
+            "9880",
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_uds_parameter(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that --uds (Unix Domain Socket) parameter is accepted."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("uds_test_app.py", content=app_file_content)
+
+    # Create a temporary UDS path
+    uds_path = tmp_path / "test.sock"
+
+    # Test UDS parameter
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--uds",
+            str(uds_path),
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # Parameter should be accepted without errors
+    assert result.exit_code == 0
+
+
+def test_workers_lifetime_parameter(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+) -> None:
+    """Test that --workers-lifetime parameter accepts human-readable durations."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("workers_lifetime_test_app.py", content=app_file_content)
+
+    # Test human-readable duration format
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-lifetime",
+            "30m",  # 30 minutes
+            "--port",
+            "9881",
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # Parameter should be accepted without errors
+    assert result.exit_code == 0
+
+    # Test another human-readable format
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-lifetime",
+            "2h",  # 2 hours
+            "--port",
+            "9881",
+            "--help",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Test numeric format (seconds)
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-lifetime",
+            "3600",  # 1 hour in seconds
+            "--port",
+            "9881",
+            "--help",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_static_file_parameters(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that static file serving parameters work correctly."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("static_test_app.py", content=app_file_content)
+
+    # Create a static directory
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "test.txt").write_text("test content")
+
+    # Test static file parameters - just check they are accepted without error
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--static-path-mount",
+            str(static_dir),
+            "--static-path-route",
+            "/assets",
+            "--static-path-expires",
+            "3600",
+            "--port",
+            "9882",
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # Parameters should be accepted without errors
+    assert result.exit_code == 0
+
+    # Test with default route and expires
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--static-path-mount",
+            str(static_dir),
+            "--port",
+            "9882",
+            "--help",
+        ],
+    )
+    assert result.exit_code == 0
+
+    # Test invalid expires value (should fail)
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--static-path-mount",
+            str(static_dir),
+            "--static-path-expires",
+            "30",  # Invalid value - must be >= 60
+            "--port",
+            "9882",
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_websockets_parameter(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+) -> None:
+    """Test that --websockets/--no-websockets parameter works correctly."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("websockets_test_app.py", content=app_file_content)
+
+    # Test enabling websockets (default)
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--websockets",
+            "--port",
+            "9883",
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # Parameter should be accepted without errors
+    assert result.exit_code == 0
+
+    # Test disabling websockets
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--no-websockets",
+            "--port",
+            "9883",
+            "--help",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_combined_new_parameters(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that multiple new parameters can be combined successfully."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("combined_test_app.py", content=app_file_content)
+
+    # Create static directory and UDS path
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "app.js").write_text("console.log('test');")
+    uds_path = tmp_path / "app.sock"
+
+    # Test combining multiple new parameters
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--workers-max-rss",
+            "256",
+            "--workers-lifetime",
+            "1h",
+            "--uds",
+            str(uds_path),
+            "--static-path-mount",
+            str(static_dir),
+            "--static-path-route",
+            "/static",
+            "--static-path-expires",
+            "7200",
+            "--no-websockets",
+            "--help",  # Just show help to avoid actually starting server
+        ],
+    )
+    # All parameters should be accepted without errors
+    assert result.exit_code == 0
+
+
+def test_static_file_directory_validation(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    tmp_path: Path,
+) -> None:
+    """Test that static file directory validation works correctly."""
+    app_file_content = textwrap.dedent(
+        """
+from litestar import Litestar, get
+from litestar_granian import GranianPlugin
+
+@get("/")
+async def hello() -> dict[str, str]:
+    return {"hello": "world"}
+
+app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
+    """,
+    )
+    app_file = create_app_file("static_validation_test_app.py", content=app_file_content)
+
+    # Test with non-existent directory (should fail)
+    nonexistent_dir = tmp_path / "nonexistent"
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--static-path-mount",
+            str(nonexistent_dir),
+            "--port",
+            "9884",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower() or "invalid" in result.output.lower()
+
+    # Test with file instead of directory (should fail)
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("test")
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--static-path-mount",
+            str(test_file),
+            "--port",
+            "9884",
+        ],
+    )
+    assert result.exit_code != 0
