@@ -49,7 +49,7 @@ def checkout(branch: str) -> Generator[None]:
 def load_version_spec() -> VersionSpec:
     versions_file = Path("docs/_static/versions.json")
     if versions_file.exists():
-        return cast("VersionSpec", json.loads(versions_file.read_text()))
+        return cast("VersionSpec", json.loads(versions_file.read_text(encoding="utf-8")))
     return {"versions": [], "latest": ""}
 
 
