@@ -11,7 +11,7 @@ from pathlib import Path
 from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
-from granian.cli import _pretty_print_default
+from granian.cli import Duration, _pretty_print_default
 from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
@@ -107,6 +107,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # Server configuration
 @option("-H", "--host", help="Host address to bind to", default="127.0.0.1", show_default=True, envvar="LITESTAR_HOST")
 @option("-p", "--port", help="Port to bind to", type=int, default=8000, show_default=True, envvar="LITESTAR_PORT")
+@option(
+    "--uds",
+    type=ClickPath(exists=False, writable=True),
+    help="Unix Domain Socket path (experimental)",
+)
 @option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
 @option("-P", "--pdb", "--use-pdb", help="Drop into PDB on an exception", is_flag=True, envvar="LITESTAR_PDB")
@@ -303,8 +308,8 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--workers-lifetime",
-    type=IntRange(60),
-    help="The maximum amount of time in seconds a worker will be kept alive before respawn",
+    type=Duration(60),
+    help="The maximum amount of time a worker will be kept alive before respawn (supports human-readable format like '6h', '30m')",
 )
 @option(
     "--workers-kill-timeout",
@@ -312,6 +317,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
     default=5,
     show_default="disabled",
+)
+@option(
+    "--workers-max-rss",
+    type=IntRange(1),
+    help="The maximum amount of memory (in MiB) a worker can consume before respawn",
 )
 # Development & Debug options
 @option(
@@ -360,6 +370,33 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     type=ClickPath(exists=False, file_okay=True, dir_okay=False, writable=True, path_type=Path),  # type: ignore[type-var]
     help="A path to write the PID file to",
 )
+# WebSocket configuration
+@option(
+    "--websockets/--no-websockets",
+    "websockets_enabled",
+    default=True,
+    help="Enable or disable WebSocket handling",
+    show_default=True,
+)
+# Static file serving (Granian server-level)
+@option(
+    "--static-path-route",
+    help="URL route prefix for static files served by Granian (server-level performance)",
+    default="/static",
+    show_default=True,
+)
+@option(
+    "--static-path-mount",
+    type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
+    help="Directory path to serve static files from via Granian (server-level)",
+)
+@option(
+    "--static-path-expires",
+    type=IntRange(min=60),
+    default=86400,
+    help="Cache expiration time in seconds for Granian static files",
+    show_default=True,
+)
 @option(
     "--in-subprocess/--no-subprocess",
     "in_subprocess",
@@ -378,6 +415,7 @@ def run_command(
     app: "Litestar",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -415,6 +453,7 @@ def run_command(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -422,6 +461,10 @@ def run_command(
     reload_ignore_paths: Optional[list[Path]],
     process_name: Optional[str],
     pid_file: Optional[Path],
+    static_path_route: str,
+    static_path_mount: Optional[Path],
+    static_path_expires: int,
+    websockets_enabled: bool,
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
@@ -514,6 +557,8 @@ def run_command(
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
+                workers_max_rss=workers_max_rss,
+                uds=uds,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
@@ -521,6 +566,10 @@ def run_command(
                 reload_ignore_patterns=reload_ignore_patterns,
                 process_name=process_name,
                 pid_file=pid_file,
+                static_path_route=static_path_route,
+                static_path_mount=static_path_mount,
+                static_path_expires=static_path_expires,
+                websockets_enabled=websockets_enabled,
             )
         else:
             _run_granian(
@@ -563,6 +612,8 @@ def run_command(
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
+                workers_max_rss=workers_max_rss,
+                uds=uds,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
@@ -570,6 +621,10 @@ def run_command(
                 reload_ignore_patterns=reload_ignore_patterns,
                 process_name=process_name,
                 pid_file=pid_file,
+                static_path_route=static_path_route,
+                static_path_mount=static_path_mount,
+                static_path_expires=static_path_expires,
+                websockets_enabled=websockets_enabled,
                 use_litestar_logger=use_litestar_logger,
             )
 
@@ -578,6 +633,7 @@ def _run_granian(
     env: "LitestarEnv",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -614,6 +670,7 @@ def _run_granian(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -621,6 +678,10 @@ def _run_granian(
     reload_ignore_paths: Optional[list[Path]],
     process_name: Optional[str],
     pid_file: Optional[Path],
+    static_path_route: str,
+    static_path_mount: Optional[Path],
+    static_path_expires: int,
+    websockets_enabled: bool,
     use_litestar_logger: bool,
 ) -> None:
     log_dictconfig = _get_logging_config(env, use_litestar_logger)
@@ -656,47 +717,57 @@ def _run_granian(
         if module_path in sys.modules:
             del sys.modules[module_path]
         del loaded_modules, env
-    server = Granian(
-        app_path,
-        address=host,
-        port=port,
-        interface=Interfaces.ASGI,
-        workers=wc,
-        blocking_threads=blocking_threads,
-        blocking_threads_idle_timeout=blocking_threads_idle_timeout,
-        runtime_threads=runtime_threads,
-        runtime_blocking_threads=runtime_blocking_threads,
-        runtime_mode=runtime_mode,
-        loop=loop,
-        task_impl=task_impl,
-        http=http,
-        websockets=http.value != HTTPModes.http2.value,
-        backlog=backlog,
-        backpressure=backpressure,
-        http1_settings=http1_settings,
-        http2_settings=http2_settings,
-        log_enabled=log_enabled,
-        log_access=log_access_enabled,
-        log_access_format=log_access_fmt,
-        log_level=log_level,
-        log_dictconfig=log_dictconfig,
-        ssl_cert=ssl_certificate,
-        ssl_key=ssl_keyfile,
-        ssl_key_password=ssl_keyfile_password,
-        url_path_prefix=url_path_prefix,
-        respawn_failed_workers=respawn_failed_workers,
-        respawn_interval=respawn_interval,
-        workers_lifetime=workers_lifetime,
-        workers_kill_timeout=workers_kill_timeout,
-        factory=is_factory,
-        reload=reload,
-        reload_paths=reload_paths,
-        reload_ignore_paths=reload_ignore_paths,
-        reload_ignore_dirs=reload_ignore_dirs,
-        reload_ignore_patterns=reload_ignore_patterns,
-        process_name=process_name,
-        pid_file=pid_file,
-    )
+    # Build server arguments
+    server_args: dict[str, Any] = {
+        "address": host,
+        "port": port,
+        "interface": Interfaces.ASGI,
+        "workers": wc,
+        "blocking_threads": blocking_threads,
+        "blocking_threads_idle_timeout": blocking_threads_idle_timeout,
+        "runtime_threads": runtime_threads,
+        "runtime_blocking_threads": runtime_blocking_threads,
+        "runtime_mode": runtime_mode,
+        "loop": loop,
+        "task_impl": task_impl,
+        "http": http,
+        "websockets": websockets_enabled and http.value != HTTPModes.http2.value,
+        "backlog": backlog,
+        "backpressure": backpressure,
+        "http1_settings": http1_settings,
+        "http2_settings": http2_settings,
+        "log_enabled": log_enabled,
+        "log_access": log_access_enabled,
+        "log_access_format": log_access_fmt,
+        "log_level": log_level,
+        "log_dictconfig": log_dictconfig,
+        "ssl_cert": ssl_certificate,
+        "ssl_key": ssl_keyfile,
+        "ssl_key_password": ssl_keyfile_password,
+        "url_path_prefix": url_path_prefix,
+        "respawn_failed_workers": respawn_failed_workers,
+        "respawn_interval": respawn_interval,
+        "workers_lifetime": workers_lifetime,
+        "workers_kill_timeout": workers_kill_timeout,
+        "workers_max_rss": workers_max_rss,
+        "uds": Path(uds) if uds else None,
+        "factory": is_factory,
+        "reload": reload,
+        "reload_paths": reload_paths,
+        "reload_ignore_paths": reload_ignore_paths,
+        "reload_ignore_dirs": reload_ignore_dirs,
+        "reload_ignore_patterns": reload_ignore_patterns,
+        "process_name": process_name,
+        "pid_file": pid_file,
+    }
+
+    # Add static file parameters only if static_path_mount is configured
+    if static_path_mount is not None:
+        server_args["static_path_route"] = static_path_route
+        server_args["static_path_mount"] = static_path_mount
+        server_args["static_path_expires"] = static_path_expires
+
+    server = Granian(app_path, **server_args)
 
     try:
         server.serve()
@@ -793,6 +864,7 @@ def _run_granian_in_subprocess(
     env: "LitestarEnv",
     host: str,
     port: int,
+    uds: Optional[str],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -829,6 +901,7 @@ def _run_granian_in_subprocess(
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
+    workers_max_rss: Optional[int],
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
@@ -836,6 +909,10 @@ def _run_granian_in_subprocess(
     reload_ignore_paths: Optional[list[Path]],
     process_name: Optional[str],
     pid_file: Optional[Path],
+    static_path_route: str,
+    static_path_mount: Optional[Path],
+    static_path_expires: int,
+    websockets_enabled: bool,
 ) -> None:
     process_args: dict[str, Any] = {
         "reload": reload,
@@ -874,6 +951,10 @@ def _run_granian_in_subprocess(
         process_args["access-log-fmt"] = log_access_fmt
     if workers_kill_timeout:
         process_args["workers-kill-timeout"] = workers_kill_timeout
+    if workers_max_rss:
+        process_args["workers-max-rss"] = workers_max_rss
+    if uds:
+        process_args["uds"] = str(Path(uds).absolute())
     if blocking_threads:
         process_args["blocking-threads"] = blocking_threads
     if blocking_threads_idle_timeout:
@@ -891,6 +972,8 @@ def _run_granian_in_subprocess(
         process_args["http1-header-read-timeout"] = http1_header_read_timeout
         process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-pipeline-flush"] = http1_pipeline_flush
+        # websockets are supported in http1 mode
+        process_args["websockets"] = websockets_enabled
     if http.value == HTTPModes.http2.value:
         process_args["http2-adaptive-window"] = http2_adaptive_window
         process_args["http2-initial-connection-window-size"] = http2_initial_connection_window_size
@@ -902,7 +985,7 @@ def _run_granian_in_subprocess(
         process_args["http2-max-frame-size"] = http2_max_frame_size
         process_args["http2-max-headers-size"] = http2_max_headers_size
         process_args["http2-max-send-buffer-size"] = http2_max_send_buffer_size
-        # websockets aren't supported in http2 only?
+        # websockets are not supported in http2 mode
         process_args["websockets"] = False
     if url_path_prefix is not None:
         process_args["url-path-prefix"] = url_path_prefix
@@ -916,6 +999,10 @@ def _run_granian_in_subprocess(
         process_args["process-name"] = process_name
     if pid_file is not None:
         process_args["pid-file"] = Path(pid_file).absolute
+    if static_path_mount is not None:
+        process_args["static-path-route"] = static_path_route
+        process_args["static-path-mount"] = str(Path(static_path_mount).absolute())
+        process_args["static-path-expires"] = static_path_expires
     command = [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)]
 
     process = subprocess.Popen(command, restore_signals=False)

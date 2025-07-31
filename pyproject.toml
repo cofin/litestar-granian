@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.15.0",
-  "granian[reload,pname]>=2.0.1",
+  "granian[reload,pname]>=2.5.0",
   "httptools",
   "websockets",
 ]
@@ -33,7 +33,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.13.1"
+version = "0.14.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
