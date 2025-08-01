@@ -372,8 +372,8 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 # WebSocket configuration
 @option(
-    "--websockets/--no-websockets",
-    "websockets_enabled",
+    "--ws/--no-ws",
+    "ws_enabled",
     default=True,
     help="Enable or disable WebSocket handling",
     show_default=True,
@@ -464,7 +464,7 @@ def run_command(
     static_path_route: str,
     static_path_mount: Optional[Path],
     static_path_expires: int,
-    websockets_enabled: bool,
+    ws_enabled: bool,
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
@@ -569,7 +569,7 @@ def run_command(
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
                 static_path_expires=static_path_expires,
-                websockets_enabled=websockets_enabled,
+                ws_enabled=ws_enabled,
             )
         else:
             _run_granian(
@@ -624,7 +624,7 @@ def run_command(
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
                 static_path_expires=static_path_expires,
-                websockets_enabled=websockets_enabled,
+                ws_enabled=ws_enabled,
                 use_litestar_logger=use_litestar_logger,
             )
 
@@ -681,7 +681,7 @@ def _run_granian(
     static_path_route: str,
     static_path_mount: Optional[Path],
     static_path_expires: int,
-    websockets_enabled: bool,
+    ws_enabled: bool,
     use_litestar_logger: bool,
 ) -> None:
     log_dictconfig = _get_logging_config(env, use_litestar_logger)
@@ -731,7 +731,7 @@ def _run_granian(
         "loop": loop,
         "task_impl": task_impl,
         "http": http,
-        "websockets": websockets_enabled and http.value != HTTPModes.http2.value,
+        "websockets": ws_enabled and http.value != HTTPModes.http2.value,
         "backlog": backlog,
         "backpressure": backpressure,
         "http1_settings": http1_settings,
@@ -912,7 +912,7 @@ def _run_granian_in_subprocess(
     static_path_route: str,
     static_path_mount: Optional[Path],
     static_path_expires: int,
-    websockets_enabled: bool,
+    ws_enabled: bool,
 ) -> None:
     process_args: dict[str, Any] = {
         "reload": reload,
@@ -973,7 +973,7 @@ def _run_granian_in_subprocess(
         process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-pipeline-flush"] = http1_pipeline_flush
         # websockets are supported in http1 mode
-        process_args["websockets"] = websockets_enabled
+        process_args["websockets"] = ws_enabled
     if http.value == HTTPModes.http2.value:
         process_args["http2-adaptive-window"] = http2_adaptive_window
         process_args["http2-initial-connection-window-size"] = http2_initial_connection_window_size
