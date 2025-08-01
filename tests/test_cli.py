@@ -638,7 +638,7 @@ def test_websockets_parameter(
     create_app_file: CreateAppFileFixture,
     root_command: LitestarGroup,
 ) -> None:
-    """Test that --websockets/--no-websockets parameter works correctly."""
+    """Test that --ws/--no-ws parameter works correctly."""
     app_file_content = textwrap.dedent(
         """
 from litestar import Litestar, get
@@ -660,7 +660,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
             "--app",
             f"{app_file.stem}:app",
             "run",
-            "--websockets",
+            "--ws",
             "--port",
             "9883",
             "--help",  # Just show help to avoid actually starting server
@@ -676,7 +676,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
             "--app",
             f"{app_file.stem}:app",
             "run",
-            "--no-websockets",
+            "--no-ws",
             "--port",
             "9883",
             "--help",
@@ -731,7 +731,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
             "/static",
             "--static-path-expires",
             "7200",
-            "--no-websockets",
+            "--no-ws",
             "--help",  # Just show help to avoid actually starting server
         ],
     )
