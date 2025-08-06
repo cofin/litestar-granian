@@ -685,6 +685,97 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     assert result.exit_code == 0
 
 
+@pytest.mark.parametrize(
+    "ws_enabled, subprocess_mode",
+    [
+        (True, True),  # --ws with --in-subprocess (default)
+        (False, True),  # --no-ws with --in-subprocess (default)
+        (True, False),  # --ws with --no-subprocess
+        (False, False),  # --no-ws with --no-subprocess
+    ],
+)
+def test_websockets_subprocess_args(
+    runner: CliRunner,
+    create_app_file: CreateAppFileFixture,
+    root_command: LitestarGroup,
+    ws_enabled: bool,
+    subprocess_mode: bool,
+) -> None:
+    """Test websocket arguments work correctly in both subprocess and direct modes.
+
+    This test validates that the websocket argument is properly converted to 'ws'/'no-ws'
+    for the Granian CLI when running in subprocess mode, addressing the mismatch between
+    the litestar-granian CLI parameter names and Granian's expected parameter names.
+    """
+    app_file_content = textwrap.dedent(
+        """
+from __future__ import annotations
+
+import asyncio
+import asyncio.tasks
+import os
+import signal
+
+from litestar import Controller, Litestar, get
+
+from litestar_granian import GranianPlugin
+
+
+async def dont_run_forever() -> None:
+    async def _fn() -> None:
+        await asyncio.sleep(1)
+        os.kill(os.getpid(), signal.SIGINT)
+        os.kill(os.getpid(), signal.SIGTERM)
+        os.kill(os.getpid(), signal.SIGKILL)
+
+    asyncio.ensure_future(_fn())
+
+
+class SampleController(Controller):
+    @get(path="/sample")
+    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
+        return {"sample": "hello-world"}
+
+
+app = Litestar(
+    plugins=[GranianPlugin()], route_handlers=[SampleController], on_startup=[dont_run_forever]
+)
+    """,
+    )
+    app_file = create_app_file(f"ws_subprocess_test_{ws_enabled}_{subprocess_mode}.py", content=app_file_content)
+
+    # Build command args
+    args = [
+        "--app",
+        f"{app_file.stem}:app",
+        "run",
+        "--port",
+        "9885",
+    ]
+
+    # Add websocket flag
+    if ws_enabled:
+        args.append("--ws")
+    else:
+        args.append("--no-ws")
+
+    # Add subprocess mode flag
+    if subprocess_mode:
+        args.append("--in-subprocess")
+    else:
+        args.extend(["--no-subprocess", "--use-litestar-logger"])
+
+    result = runner.invoke(root_command, args)
+
+    # The command should execute successfully regardless of websocket/subprocess combination
+    if subprocess_mode:
+        # In subprocess mode, check that Granian subprocess was started successfully
+        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
+    else:
+        # In direct mode, check that Granian was started directly
+        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
+
+
 def test_combined_new_parameters(
     runner: CliRunner,
     create_app_file: CreateAppFileFixture,

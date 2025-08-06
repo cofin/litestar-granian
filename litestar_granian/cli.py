@@ -972,8 +972,7 @@ def _run_granian_in_subprocess(
         process_args["http1-header-read-timeout"] = http1_header_read_timeout
         process_args["http1-keep-alive"] = http1_keep_alive
         process_args["http1-pipeline-flush"] = http1_pipeline_flush
-        # websockets are supported in http1 mode
-        process_args["websockets"] = ws_enabled
+        process_args["ws"] = ws_enabled
     if http.value == HTTPModes.http2.value:
         process_args["http2-adaptive-window"] = http2_adaptive_window
         process_args["http2-initial-connection-window-size"] = http2_initial_connection_window_size
@@ -986,7 +985,7 @@ def _run_granian_in_subprocess(
         process_args["http2-max-headers-size"] = http2_max_headers_size
         process_args["http2-max-send-buffer-size"] = http2_max_send_buffer_size
         # websockets are not supported in http2 mode
-        process_args["websockets"] = False
+        process_args["ws"] = False
     if url_path_prefix is not None:
         process_args["url-path-prefix"] = url_path_prefix
     if ssl_certificate is not None:
