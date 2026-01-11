@@ -10,7 +10,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -23,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.15.0",
-  "granian[reload,pname]>=2.5.0",
+  "granian[reload,pname]>=2.6.0",
   "httptools",
   "websockets",
 ]
@@ -32,7 +31,7 @@ keywords = ["litestar", "granian", "asgi"]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 version = "0.14.2"
 
 [project.urls]
@@ -66,8 +65,8 @@ allow-direct-references = true
 # Environment Setup #
 #####################
 # Test environment with test-only dependencies
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
   # - Documentation
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",

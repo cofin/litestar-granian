@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import asyncio.tasks
 import os
 import signal
 
