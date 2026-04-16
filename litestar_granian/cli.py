@@ -933,12 +933,22 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
         # logging, and re-applying it from an unrelated codepath causes
         # double-configuration surprises (and breaks on platforms where the
         # handler class cannot be instantiated a second time).
-        excluded_fields = {"configure_root_logger", "incremental"}
+        # Whitelist only the keys ``logging.config.dictConfig`` understands;
+        # Litestar-specific fields like ``exception_logging_handler`` hold
+        # callables that would break serialization downstream.
+        dictconfig_keys = {
+            "formatters",
+            "filters",
+            "handlers",
+            "loggers",
+            "root",
+            "disable_existing_loggers",
+        }
         log_dictconfig = {
             field.name: copy.deepcopy(getattr(existing_logging_config, field.name))
             for field in fields(existing_logging_config)
-            if getattr(existing_logging_config, field.name) is not None
-            and field.name not in excluded_fields
+            if field.name in dictconfig_keys
+            and getattr(existing_logging_config, field.name) is not None
         }
 
         loggers = log_dictconfig.setdefault("loggers", {})
@@ -1066,7 +1076,7 @@ def _run_granian_in_subprocess(
     if env.is_app_factory:
         process_args["factory"] = env.is_app_factory
     if respawn_failed_workers:
-        process_args["respawn-interval"] = respawn_interval
+        process_args["respawn-failed-workers"] = True
     if respawn_interval:
         process_args["respawn-interval"] = respawn_interval
     if reload_paths:
@@ -1095,10 +1105,8 @@ def _run_granian_in_subprocess(
         process_args["uds-permissions"] = uds_permissions
     if blocking_threads:
         process_args["blocking-threads"] = blocking_threads
-    if blocking_threads_idle_timeout:
-        process_args["blocking-threads-idle-timeout"] = blocking_threads_idle_timeout
-    if runtime_threads:
-        process_args["runtime-threads"] = runtime_threads
+    process_args["blocking-threads-idle-timeout"] = blocking_threads_idle_timeout
+    process_args["runtime-threads"] = runtime_threads
     if runtime_blocking_threads:
         process_args["runtime-blocking-threads"] = runtime_blocking_threads
     if runtime_mode:
@@ -1139,7 +1147,7 @@ def _run_granian_in_subprocess(
     if process_name is not None:
         process_args["process-name"] = process_name
     if pid_file is not None:
-        process_args["pid-file"] = Path(pid_file).absolute
+        process_args["pid-file"] = str(Path(pid_file).absolute())
     if static_path_mount is not None:
         process_args["static-path-route"] = static_path_route
         process_args["static-path-mount"] = str(Path(static_path_mount).absolute())
