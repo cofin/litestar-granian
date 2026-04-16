@@ -1,9 +1,11 @@
+import copy
 import multiprocessing
 import os
 import platform
 import signal
 import subprocess  # noqa: S404
 import sys
+import tempfile
 from dataclasses import fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
@@ -24,6 +26,7 @@ from litestar.cli._utils import (
 )
 from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 from litestar.logging import LoggingConfig
+from litestar.serialization import encode_json
 
 try:
     from rich_click import (
@@ -602,6 +605,7 @@ def run_command(
                 static_path_mount=static_path_mount,
                 static_path_expires=static_path_expires,
                 ws_enabled=ws_enabled,
+                use_litestar_logger=use_litestar_logger,
             )
         else:
             _run_granian(
@@ -839,28 +843,80 @@ def _run_granian(
         console.print("[yellow]Granian workers stopped[/]")
 
 
+_DEFAULT_FORMATTER_FMT = "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"
+_QUEUE_HANDLER_CLASSES = (
+    "litestar.logging.standard.QueueListenerHandler",
+    "logging.handlers.QueueHandler",
+    "logging.handlers.QueueListener",
+)
+
+
+def _is_queue_handler(handler: dict[str, Any]) -> bool:
+    handler_class = handler.get("class") or handler.get("()")
+    if isinstance(handler_class, str) and any(cls in handler_class for cls in _QUEUE_HANDLER_CLASSES):
+        return True
+    return "listener" in handler
+
+
+def _neutralize_queue_handlers_for_platform(log_dictconfig: dict[str, Any]) -> None:
+    """Rewrite queue-based handlers to ``StreamHandler`` on spawn platforms.
+
+    On Linux (fork workers), each worker calls ``dictConfig`` fresh so queue
+    listeners are safe. On macOS / Windows (spawn), multiple worker processes
+    would each spin a listener thread racing on stdout — the root cause of
+    #21 / #41's "logs after close" and interleaved output. ``StreamHandler``
+    has no background thread and flushes on write.
+    """
+    if sys.platform == "linux":
+        return
+    handlers = log_dictconfig.get("handlers")
+    if not isinstance(handlers, dict):
+        return
+    for name, handler in list(handlers.items()):
+        if not isinstance(handler, dict) or not _is_queue_handler(handler):
+            continue
+        replacement: dict[str, Any] = {"class": "logging.StreamHandler"}
+        if "formatter" in handler:
+            replacement["formatter"] = handler["formatter"]
+        if "level" in handler:
+            replacement["level"] = handler["level"]
+        handlers[name] = replacement
+
+
 def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[str, Any]:
-    """Get the logging config for the Granian server.
+    """Build a safe logging dictconfig for the Granian server.
+
+    Always returns a fresh copy — never the shared ``granian.log.LOGGING_CONFIG``
+    module dict. On spawn platforms, queue-based handlers are neutralized to
+    ``StreamHandler`` to avoid worker-process listener races.
 
     Args:
-        env: The Litestar environment
-        use_litestar_logger: Whether to use the Litestar logger
+        env: The Litestar environment.
+        use_litestar_logger: Whether to derive the config from the user's
+            ``LoggingConfig`` instead of Granian's defaults.
 
     Returns:
-        dict[str, Any]: The logging configuration dictionary
+        A dictConfig-ready mapping with ``version: 1`` set.
     """
+    log_dictconfig = copy.deepcopy(LOGGING_CONFIG)
+
     if not use_litestar_logger:
-        return LOGGING_CONFIG
-    LOGGING_CONFIG["formatters"] = {
-        "generic": {
+        _neutralize_queue_handlers_for_platform(log_dictconfig)
+        log_dictconfig["version"] = 1
+        return log_dictconfig
+
+    log_dictconfig.setdefault("formatters", {})
+    if log_dictconfig["formatters"].get("generic") is None:
+        log_dictconfig["formatters"]["generic"] = {
             "()": "logging.Formatter",
-            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
-        },
-        "access": {
+            "fmt": _DEFAULT_FORMATTER_FMT,
+        }
+    if log_dictconfig["formatters"].get("access") is None:
+        log_dictconfig["formatters"]["access"] = {
             "()": "logging.Formatter",
-            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
-        },
-    }
+            "fmt": _DEFAULT_FORMATTER_FMT,
+        }
+
     existing_logging_config = cast(
         "Optional[LoggingConfig]",
         env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
@@ -869,38 +925,41 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
         if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig)
         else None,
     )
+
     if existing_logging_config is not None:
-        if existing_logging_config.loggers.get("_granian", None) is None:
-            LOGGING_CONFIG["loggers"] = {
-                "_granian": {"handlers": ["console"], "level": "INFO", "propagate": False},
-                "granian.access": {"handlers": ["console"], "level": "INFO", "propagate": False},
-            }
-            existing_logging_config.loggers.update({
-                "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-            })
-        if existing_logging_config.formatters.get("generic", None) is None:
-            existing_logging_config.formatters.update(
-                {
-                    "generic": existing_logging_config.formatters.get(
-                        "standard",
-                        {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"},
-                    ),
-                },
-            )
-        existing_logging_config.configure()
-    excluded_fields = {"configure_root_logger", "incremental"}
-    log_dictconfig = (
-        {
-            field.name: getattr(existing_logging_config, field.name)
+        # Build the Granian dictconfig from the user's LoggingConfig snapshot.
+        # Do not call ``existing_logging_config.configure()`` here — the
+        # ``GranianPlugin.on_app_init`` hook already configured parent-process
+        # logging, and re-applying it from an unrelated codepath causes
+        # double-configuration surprises (and breaks on platforms where the
+        # handler class cannot be instantiated a second time).
+        excluded_fields = {"configure_root_logger", "incremental"}
+        log_dictconfig = {
+            field.name: copy.deepcopy(getattr(existing_logging_config, field.name))
             for field in fields(existing_logging_config)
-            if getattr(existing_logging_config, field.name) is not None and field.name not in excluded_fields
+            if getattr(existing_logging_config, field.name) is not None
+            and field.name not in excluded_fields
         }
-        if existing_logging_config is not None
-        else LOGGING_CONFIG
-    )
-    if log_dictconfig is not None:
-        log_dictconfig["version"] = 1
+
+        loggers = log_dictconfig.setdefault("loggers", {})
+        if loggers.get("_granian") is None:
+            loggers["_granian"] = {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            }
+        if loggers.get("granian.access") is None:
+            loggers["granian.access"] = {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            }
+        formatters = log_dictconfig.setdefault("formatters", {})
+        if formatters.get("generic") is None:
+            formatters["generic"] = formatters.get("standard", {"format": _DEFAULT_FORMATTER_FMT})
+
+    _neutralize_queue_handlers_for_platform(log_dictconfig)
+    log_dictconfig["version"] = 1
     return log_dictconfig
 
 
@@ -983,6 +1042,7 @@ def _run_granian_in_subprocess(
     static_path_mount: Optional[Path],
     static_path_expires: int,
     ws_enabled: bool,
+    use_litestar_logger: bool = False,
 ) -> None:
     process_args: dict[str, Any] = {
         "reload": reload,
@@ -1084,6 +1144,20 @@ def _run_granian_in_subprocess(
         process_args["static-path-route"] = static_path_route
         process_args["static-path-mount"] = str(Path(static_path_mount).absolute())
         process_args["static-path-expires"] = static_path_expires
+
+    log_config_tempfile: Optional[Path] = None
+    if use_litestar_logger:
+        log_dictconfig = _get_logging_config(env, use_litestar_logger=True)
+        fd, log_config_path = tempfile.mkstemp(prefix="litestar-granian-logconf-", suffix=".json")
+        try:
+            with os.fdopen(fd, "wb") as fp:
+                fp.write(encode_json(log_dictconfig))
+        except Exception:
+            Path(log_config_path).unlink(missing_ok=True)
+            raise
+        log_config_tempfile = Path(log_config_path)
+        process_args["log-config"] = str(log_config_tempfile)
+
     command = [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)]
 
     process = subprocess.Popen(command, restore_signals=False)
@@ -1120,4 +1194,6 @@ def _run_granian_in_subprocess(
             if platform.system() != "Windows":
                 process.send_signal(signal.SIGKILL)
             process.kill()
+        if log_config_tempfile is not None:
+            log_config_tempfile.unlink(missing_ok=True)
         console.print("[yellow]Granian workers stopped.[/]")

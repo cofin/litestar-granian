@@ -15,6 +15,33 @@ if TYPE_CHECKING:
 
 STRUCTLOG_INSTALLED = find_spec("structlog") is not None
 
+_GRANIAN_LOGGER_CONFIG = {"level": "INFO", "handlers": ["console"], "propagate": False}
+_DEFAULT_FORMATTER_FMT = "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"
+
+
+def _inject_granian_loggers(logging_config: "Optional[LoggingConfig]") -> None:
+    """Inject ``_granian`` / ``granian.access`` loggers into a logging config, non-destructively.
+
+    Mirrors the guard pattern used for the non-structlog path: only adds a logger
+    entry when the key is missing. Existing user-defined entries are preserved.
+    """
+    if logging_config is None:
+        return
+    if logging_config.loggers.get("_granian") is None:
+        logging_config.loggers["_granian"] = dict(_GRANIAN_LOGGER_CONFIG)
+    if logging_config.loggers.get("granian.access") is None:
+        logging_config.loggers["granian.access"] = dict(_GRANIAN_LOGGER_CONFIG)
+
+
+def _ensure_generic_formatter(logging_config: "Optional[LoggingConfig]", fallback_key: str = "standard") -> None:
+    """Ensure a ``generic`` formatter exists so Granian's default config finds one."""
+    if logging_config is None:
+        return
+    if logging_config.formatters.get("generic") is None:
+        logging_config.formatters["generic"] = logging_config.formatters.get(
+            fallback_key, {"format": _DEFAULT_FORMATTER_FMT}
+        )
+
 
 class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
     """Granian server plugin."""
@@ -30,54 +57,18 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
 
     def on_app_init(self, app_config: "AppConfig") -> "AppConfig":
         if is_logging_config(app_config.logging_config):
-            if app_config.logging_config.loggers.get("_granian", None) is None:
-                app_config.logging_config.loggers.update({
-                    "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                    "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                })
-            if app_config.logging_config.formatters.get("generic", None) is None:
-                app_config.logging_config.formatters.update(
-                    {
-                        "generic": app_config.logging_config.formatters.get(
-                            "standard",
-                            {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"},
-                        ),
-                    },
-                )
+            _inject_granian_loggers(app_config.logging_config)
+            _ensure_generic_formatter(app_config.logging_config)
             app_config.logging_config.configure()
         if STRUCTLOG_INSTALLED:
             structlog_plugin = _get_structlog_plugin(app_config)
             if structlog_plugin is not None and is_logging_config(
                 structlog_plugin._config.structlog_logging_config.standard_lib_logging_config
             ):
-                structlog_plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.update(
-                    {
-                        "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                        "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                    },
-                )
-                if (
-                    structlog_plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.get(
-                        "_granian", None
-                    )
-                    is None
-                ):
-                    structlog_plugin._config.structlog_logging_config.standard_lib_logging_config.loggers.update(
-                        {
-                            "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                            "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                        },
-                    )
-                if (
-                    structlog_plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.get(
-                        "standard",
-                        None,
-                    )
-                    is None
-                ):
-                    structlog_plugin._config.structlog_logging_config.standard_lib_logging_config.formatters.update(
-                        {"standard": {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"}},
-                    )
+                stdlib_config = structlog_plugin._config.structlog_logging_config.standard_lib_logging_config
+                _inject_granian_loggers(stdlib_config)
+                if stdlib_config.formatters.get("standard") is None:
+                    stdlib_config.formatters["standard"] = {"format": _DEFAULT_FORMATTER_FMT}
                 structlog_plugin._config.structlog_logging_config.configure()
 
         return super().on_app_init(app_config)
