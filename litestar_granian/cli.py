@@ -511,9 +511,6 @@ def run_command(
     instance.
     """
 
-    if reload:
-        # code fails to fully reload unless this is set to true
-        in_subprocess = True
     if debug:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
@@ -738,6 +735,16 @@ def _run_granian(
     ws_enabled: bool,
     use_litestar_logger: bool,
 ) -> None:
+    if reload:
+        # Granian's worker spawn reads ``multiprocessing.get_start_method()``.
+        # On Linux the default is ``fork`` (3.13-) or ``forkserver`` (3.14+).
+        # Fork children inherit the parent's ``sys.modules``, so once the app
+        # is imported in the parent (``LitestarEnv`` does this), respawned
+        # workers reuse the stale module and never observe source changes.
+        # Forcing ``spawn`` gives each respawn a fresh interpreter, which is
+        # what reload actually requires.
+        multiprocessing.set_start_method("spawn", force=True)
+
     log_dictconfig = _get_logging_config(env, use_litestar_logger)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
@@ -763,14 +770,6 @@ def _run_granian(
         http2_settings = None
     app_path = env.app_path
     is_factory = env.is_app_factory
-    if reload:
-        module_path = app_path.split(":")[0]
-        loaded_modules = [m for m in sys.modules if m.startswith(module_path.split(".")[0])]
-        for m in loaded_modules:
-            del sys.modules[m]
-        if module_path in sys.modules:
-            del sys.modules[module_path]
-        del loaded_modules, env
     # Build server arguments
     server_args: dict[str, Any] = {
         "address": host,
