@@ -453,6 +453,18 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
 )
+@option(
+    "--auto-static/--no-auto-static",
+    "auto_static",
+    default=False,
+    is_flag=True,
+    help=(
+        "Auto-map Litestar StaticFilesConfig entries to Granian native static serving. "
+        "Only legacy StaticFilesConfig is introspected; create_static_files_router() "
+        "closures are opaque and must be configured explicitly. Matched routes bypass "
+        "ASGI entirely (no guards, middleware, or custom 404 handling)."
+    ),
+)
 # Process working directory & environment files
 @option(
     "--working-dir",
@@ -578,6 +590,7 @@ def run_command(
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
+    auto_static: bool,
     working_dir: Optional[Path],
     env_files: "tuple[Path, ...]",
     log_config: Optional[Path],
@@ -615,6 +628,26 @@ def run_command(
     env: LitestarEnv = ctx.obj
     del ctx
     workers = wc
+
+    if auto_static and not static_path_mount:
+        detected_routes, detected_mounts, detected_dir_to_file = _detect_static_from_litestar(env.app)
+        if detected_routes:
+            static_path_route = tuple(detected_routes)
+            static_path_mount = tuple(detected_mounts)
+            if static_path_dir_to_file is None and detected_dir_to_file is not None:
+                static_path_dir_to_file = detected_dir_to_file
+            console.print(
+                f"[cyan]auto-static:[/] mapped {len(detected_routes)} Litestar StaticFilesConfig "
+                f"entries to Granian native serving."
+            )
+
+    if not metrics_enabled and _has_prometheus_plugin(env.app):
+        metrics_enabled = True
+        console.print(
+            "[cyan]auto-metrics:[/] PrometheusPlugin detected; enabling Granian metrics endpoint "
+            f"on {metrics_address}:{metrics_port}."
+        )
+
     if create_self_signed_cert:
         cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
         ssl_certificate = ssl_certificate or Path(cert) if cert is not None else None  # pyright: ignore[reportUnnecessaryComparison]
@@ -968,6 +1001,64 @@ _QUEUE_HANDLER_CLASSES = (
     "logging.handlers.QueueHandler",
     "logging.handlers.QueueListener",
 )
+
+
+def _detect_static_from_litestar(
+    app: "Litestar",
+) -> "tuple[list[str], list[Path], Optional[str]]":
+    """Return route/mount/dir_to_file tuples derived from Litestar StaticFilesConfig.
+
+    Only legacy single-directory, local-filesystem configs are eligible.
+    Entries with guards, send_as_attachment, or multi-directory fallthrough
+    are skipped with a console warning.
+    """
+    from litestar.file_system import BaseLocalFileSystem
+
+    configs = getattr(app, "static_files_config", None)
+    if not configs:
+        return [], [], None
+    routes: list[str] = []
+    mounts: list[Path] = []
+    dir_to_file: Optional[str] = None
+    for cfg in configs:
+        directories = list(getattr(cfg, "directories", []) or [])
+        if len(directories) != 1:
+            console.print(
+                f"[yellow]auto-static: skipping {cfg.path!r} — "
+                f"expected exactly 1 directory, got {len(directories)}[/]"
+            )
+            continue
+        fs = getattr(cfg, "file_system", None)
+        if fs is not None and not isinstance(fs, BaseLocalFileSystem):
+            console.print(
+                f"[yellow]auto-static: skipping {cfg.path!r} — custom file_system is not supported[/]"
+            )
+            continue
+        if getattr(cfg, "guards", None):
+            console.print(
+                f"[yellow]auto-static: skipping {cfg.path!r} — guards are not supported by Granian native serving[/]"
+            )
+            continue
+        if getattr(cfg, "send_as_attachment", False):
+            console.print(
+                f"[yellow]auto-static: skipping {cfg.path!r} — send_as_attachment is not supported[/]"
+            )
+            continue
+        routes.append(cfg.path)
+        mounts.append(Path(directories[0]))
+        if getattr(cfg, "html_mode", False) and dir_to_file is None:
+            dir_to_file = "index.html"
+    return routes, mounts, dir_to_file
+
+
+def _has_prometheus_plugin(app: "Litestar") -> bool:
+    """Return True if Litestar's PrometheusPlugin is installed on the app."""
+    try:
+        from litestar.plugins.prometheus import PrometheusPlugin
+    except ImportError:
+        return False
+    plugins = getattr(app, "plugins", []) or []
+    return any(isinstance(p, PrometheusPlugin) for p in plugins)
 
 
 def _is_queue_handler(handler: dict[str, Any]) -> bool:
