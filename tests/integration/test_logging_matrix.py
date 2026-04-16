@@ -65,9 +65,7 @@ def test_matrix_no_queue_handlers_on_spawn(
 
 
 @pytest.mark.parametrize("platform_name", ["linux", "darwin", "win32"])
-def test_matrix_granian_loggers_always_present(
-    monkeypatch: pytest.MonkeyPatch, platform_name: str
-) -> None:
+def test_matrix_granian_loggers_always_present(monkeypatch: pytest.MonkeyPatch, platform_name: str) -> None:
     monkeypatch.setattr("sys.platform", platform_name)
     env = _env_with(_queue_config())
 
@@ -78,9 +76,7 @@ def test_matrix_granian_loggers_always_present(
 
 
 @pytest.mark.parametrize("platform_name", ["linux", "darwin", "win32"])
-def test_matrix_returns_dictconfig_version(
-    monkeypatch: pytest.MonkeyPatch, platform_name: str
-) -> None:
+def test_matrix_returns_dictconfig_version(monkeypatch: pytest.MonkeyPatch, platform_name: str) -> None:
     monkeypatch.setattr("sys.platform", platform_name)
     env = _env_with(None)
     assert _get_logging_config(env, use_litestar_logger=False)["version"] == 1

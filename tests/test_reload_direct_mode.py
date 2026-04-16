@@ -132,8 +132,7 @@ def test_reload_force_is_gone_from_run_command() -> None:
     """
     import inspect
 
-    # ``run_command`` is a click-wrapped ``RichCommand``; read the callback.
-    callback = granian_cli.run_command.callback  # type: ignore[attr-defined]
+    callback = granian_cli.run_command.callback
+    assert callback is not None
     source = inspect.getsource(callback)
-    # The fixed code sets the spawn context; it must not clobber in_subprocess.
     assert "in_subprocess = True" not in source

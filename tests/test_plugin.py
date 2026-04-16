@@ -55,7 +55,7 @@ def test_inject_granian_loggers_preserves_existing() -> None:
 
 def test_inject_granian_loggers_noop_for_none() -> None:
     """Must not raise when given ``None`` (defensive for callers behind TypeGuard)."""
-    _inject_granian_loggers(None)  # type: ignore[arg-type]
+    _inject_granian_loggers(None)
 
 
 def test_on_app_init_injects_loggers_for_standard_config() -> None:

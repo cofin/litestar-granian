@@ -32,9 +32,7 @@ def test_detect_static_single_entry(tmp_path: Path) -> None:
 def test_detect_static_html_mode_sets_index(tmp_path: Path) -> None:
     d = tmp_path / "spa"
     d.mkdir()
-    app = Litestar(
-        static_files_config=[StaticFilesConfig(path="/", directories=[str(d)], html_mode=True)]
-    )
+    app = Litestar(static_files_config=[StaticFilesConfig(path="/", directories=[str(d)], html_mode=True)])
     _, _, dir_to_file = _detect_static_from_litestar(app)
     assert dir_to_file == "index.html"
 

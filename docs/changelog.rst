@@ -31,7 +31,7 @@ Direct mode and reload
 - ``--reload`` works with ``--no-subprocess`` again. Historically
   ``--reload`` silently forced subprocess mode because fork-workers
   inherit the parent process's ``sys.modules`` — respawned workers
-  re-used the cached app module and never saw source changes. The fix
+  reused the cached app module and never saw source changes. The fix
   is in the parent: when reload is active we set the multiprocessing
   start method to ``spawn`` so each Granian respawn is a fresh Python
   interpreter. Direct mode is generally preferred because it keeps the

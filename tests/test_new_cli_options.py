@@ -99,8 +99,8 @@ def test_subprocess_working_dir_and_env_files(tmp_path: Path) -> None:
     env_a = tmp_path / ".env"
     env_a.write_text("X=1")
     argv = _capture_process_args(working_dir=workdir, env_files=(env_a,))
-    assert any(a.startswith("--working-dir=") and "/w" in a for a in argv)
-    assert any(a.startswith("--env-files=") and ".env" in a for a in argv)
+    assert any(a.startswith("--working-dir=") and a.endswith(("w", "w/", "w\\")) for a in argv)
+    assert any(a.startswith("--env-files=") and a.endswith(".env") for a in argv)
 
 
 def test_subprocess_user_log_config_beats_use_litestar_logger(tmp_path: Path) -> None:

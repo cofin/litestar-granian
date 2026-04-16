@@ -1028,15 +1028,12 @@ def _detect_static_from_litestar(
         directories = list(getattr(cfg, "directories", []) or [])
         if len(directories) != 1:
             console.print(
-                f"[yellow]auto-static: skipping {cfg.path!r} — "
-                f"expected exactly 1 directory, got {len(directories)}[/]"
+                f"[yellow]auto-static: skipping {cfg.path!r} — expected exactly 1 directory, got {len(directories)}[/]"
             )
             continue
         fs = getattr(cfg, "file_system", None)
         if fs is not None and not isinstance(fs, BaseLocalFileSystem):
-            console.print(
-                f"[yellow]auto-static: skipping {cfg.path!r} — custom file_system is not supported[/]"
-            )
+            console.print(f"[yellow]auto-static: skipping {cfg.path!r} — custom file_system is not supported[/]")
             continue
         if getattr(cfg, "guards", None):
             console.print(
@@ -1044,9 +1041,7 @@ def _detect_static_from_litestar(
             )
             continue
         if getattr(cfg, "send_as_attachment", False):
-            console.print(
-                f"[yellow]auto-static: skipping {cfg.path!r} — send_as_attachment is not supported[/]"
-            )
+            console.print(f"[yellow]auto-static: skipping {cfg.path!r} — send_as_attachment is not supported[/]")
             continue
         routes.append(cfg.path)
         mounts.append(Path(directories[0]))
@@ -1058,9 +1053,7 @@ def _detect_static_from_litestar(
 def _has_prometheus_plugin(app: "Litestar") -> bool:
     """Return True if Litestar's PrometheusPlugin is installed on the app."""
     try:
-        prometheus_mod: Any = __import__(
-            "litestar.plugins.prometheus", fromlist=["PrometheusPlugin"]
-        )
+        prometheus_mod: Any = __import__("litestar.plugins.prometheus", fromlist=["PrometheusPlugin"])
     except ImportError:
         return False
     plugin_cls = getattr(prometheus_mod, "PrometheusPlugin", None)

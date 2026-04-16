@@ -36,9 +36,7 @@ def test_get_logging_config_does_not_mutate_module_config() -> None:
 
 def test_get_logging_config_preserves_user_granian_level() -> None:
     """Phase 0 Task 0.3: if user set ``_granian`` level, do not overwrite."""
-    user_config = LoggingConfig(
-        loggers={"_granian": {"level": "DEBUG", "handlers": ["console"], "propagate": False}}
-    )
+    user_config = LoggingConfig(loggers={"_granian": {"level": "DEBUG", "handlers": ["console"], "propagate": False}})
     env = _make_env(user_config)
 
     result = _get_logging_config(env, use_litestar_logger=True)
@@ -74,9 +72,7 @@ def test_neutralize_queue_handlers_linux_passthrough(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.parametrize("platform_name", ["darwin", "win32"])
-def test_neutralize_queue_handlers_spawn_platforms(
-    monkeypatch: pytest.MonkeyPatch, platform_name: str
-) -> None:
+def test_neutralize_queue_handlers_spawn_platforms(monkeypatch: pytest.MonkeyPatch, platform_name: str) -> None:
     """Phase 0 Task 0.2: spawn platforms swap QueueListenerHandler → StreamHandler."""
     monkeypatch.setattr("sys.platform", platform_name)
     config = {
