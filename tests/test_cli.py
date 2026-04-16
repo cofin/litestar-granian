@@ -615,7 +615,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     )
     assert result.exit_code == 0
 
-    # Test invalid expires value (should fail)
+    # Test invalid expires value (non-numeric) should fail
     result = runner.invoke(
         root_command,
         [
@@ -625,7 +625,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
             "--static-path-mount",
             str(static_dir),
             "--static-path-expires",
-            "30",  # Invalid value - must be >= 60
+            "nonsense",
             "--port",
             "9882",
         ],

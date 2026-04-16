@@ -111,9 +111,12 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--blocking-threads-idle-timeout",
-    type=IntRange(10, 600),
+    type=Duration(5, 600),
     default=30,
-    help="The maximum amount of time in seconds an idle blocking thread will be kept alive",
+    help=(
+        "The maximum amount of time an idle blocking thread will be kept alive "
+        "(supports human-readable format like '5m', '30s')"
+    ),
 )
 @option("--runtime-threads", type=IntRange(1), default=1, help="Number of runtime threads (per worker)")
 @option(
@@ -124,8 +127,8 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 @option(
     "--runtime-mode",
     type=EnumType(RuntimeModes),
-    default=RuntimeModes.st,
-    help="Runtime mode to use (single/multi threaded)",
+    default=RuntimeModes.auto,
+    help="Runtime mode to use (single/multi threaded/auto-detect)",
 )
 @option(
     "--loop",
@@ -210,8 +213,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--http2-keep-alive-timeout",
-    help="Sets a timeout for receiving an acknowledgement of the HTTP2 keep-alive ping",
-    type=int,
+    help=(
+        "Sets a timeout for receiving an acknowledgement of the HTTP2 keep-alive ping "
+        "(supports human-readable format like '20s')"
+    ),
+    type=Duration(1),
     show_default=False,
     default=HTTP2Settings.keep_alive_timeout,
 )
@@ -312,8 +318,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--workers-kill-timeout",
-    type=IntRange(1, 1800),
-    help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
+    type=Duration(1, 1800),
+    help=(
+        "The amount of time to wait for killing workers that refused to gracefully stop "
+        "(supports human-readable format like '5s', '1m')"
+    ),
     default=5,
     show_default="disabled",
 )
@@ -403,20 +412,38 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # Static file serving (Granian server-level)
 @option(
     "--static-path-route",
-    help="URL route prefix for static files served by Granian (server-level performance)",
-    default="/static",
-    show_default=True,
+    help=(
+        "URL route prefix for Granian-served static files. Repeat for multi-mount; "
+        "paired positionally with --static-path-mount."
+    ),
+    multiple=True,
 )
 @option(
     "--static-path-mount",
     type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
-    help="Directory path to serve static files from via Granian (server-level)",
+    help=(
+        "Directory path for Granian to serve static files from. Repeat for multi-mount; "
+        "paired positionally with --static-path-route."
+    ),
+    multiple=True,
+)
+@option(
+    "--static-path-dir-to-file",
+    type=str,
+    default=None,
+    help=(
+        "Filename to serve for directory requests under a static mount (e.g. 'index.html'). "
+        "Enables HTML mode for SPA-style serving."
+    ),
 )
 @option(
     "--static-path-expires",
-    type=IntRange(min=60),
+    type=Duration(0),
     default=86400,
-    help="Cache expiration time in seconds for Granian static files",
+    help=(
+        "Cache expiration for Granian static files (supports human-readable format like '1d', '1h'). "
+        "Pass 0 to disable caching."
+    ),
     show_default=True,
 )
 @option(
@@ -425,6 +452,57 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     default=True,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
+)
+# Process working directory & environment files
+@option(
+    "--working-dir",
+    type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
+    default=None,
+    help="Working directory to use when starting Granian workers.",
+)
+@option(
+    "--env-files",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    multiple=True,
+    help="One or more dotenv files to load before starting workers (repeatable).",
+)
+# External logging config file (wins over --use-litestar-logger)
+@option(
+    "--log-config",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    default=None,
+    help=(
+        "Path to a JSON file containing a logging dictConfig. Takes precedence over "
+        "--use-litestar-logger when both are set."
+    ),
+)
+# Metrics (Prometheus)
+@option(
+    "--metrics/--no-metrics",
+    "metrics_enabled",
+    default=False,
+    is_flag=True,
+    help="Enable Granian's built-in Prometheus metrics endpoint.",
+)
+@option(
+    "--metrics-scrape-interval",
+    type=Duration(1, 60),
+    default=15,
+    help="Metrics sample interval (supports human-readable format like '15s', '1m').",
+)
+@option(
+    "--metrics-address",
+    type=str,
+    default="127.0.0.1",
+    help="Address to bind the metrics endpoint to.",
+    show_default=True,
+)
+@option(
+    "--metrics-port",
+    type=IntRange(1, 65535),
+    default=9090,
+    help="Port to bind the metrics endpoint to.",
+    show_default=True,
 )
 @option(
     "--use-litestar-logger/--no-litestar-logger",
@@ -492,13 +570,21 @@ def run_command(
     reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
+    working_dir: Optional[Path],
+    env_files: "tuple[Path, ...]",
+    log_config: Optional[Path],
+    metrics_enabled: bool,
+    metrics_scrape_interval: int,
+    metrics_address: str,
+    metrics_port: int,
     use_litestar_logger: bool,
     ctx: Context,
 ) -> None:  # sourcery skip: low-code-quality
@@ -600,8 +686,16 @@ def run_command(
                 pid_file=pid_file,
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
+                static_path_dir_to_file=static_path_dir_to_file,
                 static_path_expires=static_path_expires,
                 ws_enabled=ws_enabled,
+                working_dir=working_dir,
+                env_files=env_files,
+                log_config=log_config,
+                metrics_enabled=metrics_enabled,
+                metrics_scrape_interval=metrics_scrape_interval,
+                metrics_address=metrics_address,
+                metrics_port=metrics_port,
                 use_litestar_logger=use_litestar_logger,
             )
         else:
@@ -665,8 +759,16 @@ def run_command(
                 pid_file=pid_file,
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
+                static_path_dir_to_file=static_path_dir_to_file,
                 static_path_expires=static_path_expires,
                 ws_enabled=ws_enabled,
+                working_dir=working_dir,
+                env_files=env_files,
+                log_config=log_config,
+                metrics_enabled=metrics_enabled,
+                metrics_scrape_interval=metrics_scrape_interval,
+                metrics_address=metrics_address,
+                metrics_port=metrics_port,
                 use_litestar_logger=use_litestar_logger,
             )
 
@@ -729,23 +831,29 @@ def _run_granian(
     reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
+    working_dir: Optional[Path],
+    env_files: "tuple[Path, ...]",
+    log_config: Optional[Path],
+    metrics_enabled: bool,
+    metrics_scrape_interval: int,
+    metrics_address: str,
+    metrics_port: int,
     use_litestar_logger: bool,
 ) -> None:
     if reload:
-        # Granian's worker spawn reads ``multiprocessing.get_start_method()``.
-        # On Linux the default is ``fork`` (3.13-) or ``forkserver`` (3.14+).
-        # Fork children inherit the parent's ``sys.modules``, so once the app
-        # is imported in the parent (``LitestarEnv`` does this), respawned
-        # workers reuse the stale module and never observe source changes.
-        # Forcing ``spawn`` gives each respawn a fresh interpreter, which is
-        # what reload actually requires.
         multiprocessing.set_start_method("spawn", force=True)
 
-    log_dictconfig = _get_logging_config(env, use_litestar_logger)
+    if log_config is not None:
+        import json as _json
+
+        log_dictconfig = _json.loads(Path(log_config).read_text(encoding="utf-8"))
+    else:
+        log_dictconfig = _get_logging_config(env, use_litestar_logger)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
@@ -823,11 +931,23 @@ def _run_granian(
         "pid_file": pid_file,
     }
 
-    # Add static file parameters only if static_path_mount is configured
-    if static_path_mount is not None:
-        server_args["static_path_route"] = static_path_route
-        server_args["static_path_mount"] = static_path_mount
+    if static_path_mount:
+        server_args["static_path_route"] = list(static_path_route)
+        server_args["static_path_mount"] = [Path(p) for p in static_path_mount]
         server_args["static_path_expires"] = static_path_expires
+        if static_path_dir_to_file is not None:
+            server_args["static_path_dir_to_file"] = static_path_dir_to_file
+
+    if working_dir is not None:
+        server_args["working_dir"] = working_dir
+    if env_files:
+        server_args["env_files"] = [Path(p) for p in env_files]
+
+    server_args["metrics_enabled"] = metrics_enabled
+    if metrics_enabled:
+        server_args["metrics_scrape_interval"] = metrics_scrape_interval
+        server_args["metrics_address"] = metrics_address
+        server_args["metrics_port"] = metrics_port
 
     server = Granian(app_path, **server_args)
 
@@ -1047,10 +1167,18 @@ def _run_granian_in_subprocess(
     reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
+    working_dir: Optional[Path] = None,
+    env_files: "tuple[Path, ...]" = (),
+    log_config: Optional[Path] = None,
+    metrics_enabled: bool = False,
+    metrics_scrape_interval: int = 15,
+    metrics_address: str = "127.0.0.1",
+    metrics_port: int = 9090,
     use_litestar_logger: bool = False,
 ) -> None:
     process_args: dict[str, Any] = {
@@ -1147,13 +1275,26 @@ def _run_granian_in_subprocess(
         process_args["process-name"] = process_name
     if pid_file is not None:
         process_args["pid-file"] = str(Path(pid_file).absolute())
-    if static_path_mount is not None:
-        process_args["static-path-route"] = static_path_route
-        process_args["static-path-mount"] = str(Path(static_path_mount).absolute())
+    if static_path_mount:
+        process_args["static-path-route"] = list(static_path_route)
+        process_args["static-path-mount"] = [str(Path(p).absolute()) for p in static_path_mount]
         process_args["static-path-expires"] = static_path_expires
+        if static_path_dir_to_file is not None:
+            process_args["static-path-dir-to-file"] = static_path_dir_to_file
+    if working_dir is not None:
+        process_args["working-dir"] = str(Path(working_dir).absolute())
+    if env_files:
+        process_args["env-files"] = [str(Path(p).absolute()) for p in env_files]
+    if metrics_enabled:
+        process_args["metrics"] = True
+        process_args["metrics-scrape-interval"] = metrics_scrape_interval
+        process_args["metrics-address"] = metrics_address
+        process_args["metrics-port"] = metrics_port
 
     log_config_tempfile: Optional[Path] = None
-    if use_litestar_logger:
+    if log_config is not None:
+        process_args["log-config"] = str(Path(log_config).absolute())
+    elif use_litestar_logger:
         log_dictconfig = _get_logging_config(env, use_litestar_logger=True)
         fd, log_config_path = tempfile.mkstemp(prefix="litestar-granian-logconf-", suffix=".json")
         try:

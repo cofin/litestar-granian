@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.15.0",
-  "granian[reload,pname]>=2.6.0",
+  "granian[reload,pname]>=2.7.0",
   "httptools",
   "websockets",
 ]
