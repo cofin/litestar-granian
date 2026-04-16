@@ -256,8 +256,10 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # SSL configuration
 @option(
     "--ssl-certificate",
+    "--ssl-certfile",
+    "ssl_certificate",
     type=ClickPath(file_okay=True, exists=False, dir_okay=False, readable=True),
-    help="SSL certificate file",
+    help="SSL certificate file (Uvicorn-compatible alias: --ssl-certfile)",
     default=None,
     show_default=False,
 )
@@ -353,16 +355,21 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--reload-paths",
+    "--reload-include",
+    "reload_paths",
     type=ClickPath(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
-    help="Paths to watch for changes",
+    help="Paths to watch for changes (Uvicorn-compatible alias: --reload-include)",
     show_default="Working directory",
     multiple=True,
 )
 @option(
     "--reload-ignore-dirs",
+    "--reload-exclude",
+    "reload_ignore_dirs",
     help=(
         "Names of directories to ignore changes for. "
-        "Extends the default list of directories to ignore in watchfiles' default filter"
+        "Extends the default list of directories to ignore in watchfiles' default filter. "
+        "Uvicorn-compatible alias: --reload-exclude"
     ),
     multiple=True,
 )
@@ -465,7 +472,6 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
         "ASGI entirely (no guards, middleware, or custom 404 handling)."
     ),
 )
-# Process working directory & environment files
 @option(
     "--working-dir",
     type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
@@ -478,7 +484,6 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     multiple=True,
     help="One or more dotenv files to load before starting workers (repeatable).",
 )
-# External logging config file (wins over --use-litestar-logger)
 @option(
     "--log-config",
     type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
@@ -488,7 +493,6 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
         "--use-litestar-logger when both are set."
     ),
 )
-# Metrics (Prometheus)
 @option(
     "--metrics/--no-metrics",
     "metrics_enabled",
