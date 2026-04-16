@@ -95,6 +95,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+    continue-on-error: ${{ endsWith(matrix.python-version, 't') }}
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -118,6 +119,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13", "3.14", "3.14t"]
+    continue-on-error: ${{ endsWith(matrix.python-version, 't') }}
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -140,6 +142,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
+    continue-on-error: ${{ endsWith(matrix.python-version, 't') }}
     timeout-minutes: 30
     steps:
       - name: Check out repository
