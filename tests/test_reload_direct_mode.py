@@ -11,11 +11,9 @@ These tests assert the spawn context is set; they do not spawn real workers.
 from __future__ import annotations
 
 import multiprocessing
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 from granian.constants import HTTPModes, Loops, RuntimeModes, SSLProtocols, TaskImpl
 from granian.log import LogLevels
 

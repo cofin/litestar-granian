@@ -287,6 +287,9 @@ ban-relative-imports = "all"
   "S404",
   "PLR6301",
   "FA102",
+  "S104",
+  "TC003",
+  "DOC201",
 ]
 
 

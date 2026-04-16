@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 from litestar import Litestar
 from litestar.static_files import StaticFilesConfig
 
 from litestar_granian.cli import _detect_static_from_litestar, _has_prometheus_plugin
-
-if TYPE_CHECKING:
-    pass
 
 
 def test_detect_static_empty_app() -> None:

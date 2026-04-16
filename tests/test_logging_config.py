@@ -31,7 +31,7 @@ def test_get_logging_config_does_not_mutate_module_config() -> None:
     _get_logging_config(env, use_litestar_logger=True)
     _get_logging_config(env, use_litestar_logger=True)
 
-    assert LOGGING_CONFIG == frozen
+    assert frozen == LOGGING_CONFIG
 
 
 def test_get_logging_config_preserves_user_granian_level() -> None:

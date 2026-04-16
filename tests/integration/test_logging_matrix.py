@@ -1,7 +1,7 @@
 """Phase 0 Task 0.6 — logging matrix validation.
 
-Exercises ``_get_logging_config`` across platforms × worker counts × logger
-backends × modes to catch regressions of #21 / #41 before they ship.
+Exercises ``_get_logging_config`` across platforms x worker counts x logger
+backends x modes to catch regressions of #21 / #41 before they ship.
 
 These tests run deterministically in-process by monkeypatching ``sys.platform``
 and driving the config builder directly; they do not spawn real Granian worker

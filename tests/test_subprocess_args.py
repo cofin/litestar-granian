@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 from granian.constants import HTTPModes, Loops, RuntimeModes, SSLProtocols, TaskImpl
 from granian.log import LogLevels
 

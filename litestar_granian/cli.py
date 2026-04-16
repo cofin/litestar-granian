@@ -1058,11 +1058,16 @@ def _detect_static_from_litestar(
 def _has_prometheus_plugin(app: "Litestar") -> bool:
     """Return True if Litestar's PrometheusPlugin is installed on the app."""
     try:
-        from litestar.plugins.prometheus import PrometheusPlugin
+        prometheus_mod: Any = __import__(
+            "litestar.plugins.prometheus", fromlist=["PrometheusPlugin"]
+        )
     except ImportError:
         return False
+    plugin_cls = getattr(prometheus_mod, "PrometheusPlugin", None)
+    if plugin_cls is None:
+        return False
     plugins = getattr(app, "plugins", []) or []
-    return any(isinstance(p, PrometheusPlugin) for p in plugins)
+    return any(isinstance(p, plugin_cls) for p in plugins)
 
 
 def _is_queue_handler(handler: dict[str, Any]) -> bool:
@@ -1081,7 +1086,8 @@ def _neutralize_queue_handlers_for_platform(log_dictconfig: dict[str, Any]) -> N
     #21 / #41's "logs after close" and interleaved output. ``StreamHandler``
     has no background thread and flushes on write.
     """
-    if sys.platform == "linux":
+    current_platform: str = sys.platform
+    if current_platform == "linux":
         return
     handlers = log_dictconfig.get("handlers")
     if not isinstance(handlers, dict):
@@ -1112,24 +1118,18 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
     Returns:
         A dictConfig-ready mapping with ``version: 1`` set.
     """
-    log_dictconfig = copy.deepcopy(LOGGING_CONFIG)
+    log_dictconfig: dict[str, Any] = copy.deepcopy(LOGGING_CONFIG)
 
     if not use_litestar_logger:
         _neutralize_queue_handlers_for_platform(log_dictconfig)
         log_dictconfig["version"] = 1
         return log_dictconfig
 
-    log_dictconfig.setdefault("formatters", {})
-    if log_dictconfig["formatters"].get("generic") is None:
-        log_dictconfig["formatters"]["generic"] = {
-            "()": "logging.Formatter",
-            "fmt": _DEFAULT_FORMATTER_FMT,
-        }
-    if log_dictconfig["formatters"].get("access") is None:
-        log_dictconfig["formatters"]["access"] = {
-            "()": "logging.Formatter",
-            "fmt": _DEFAULT_FORMATTER_FMT,
-        }
+    formatters: dict[str, Any] = log_dictconfig.setdefault("formatters", {})
+    if formatters.get("generic") is None:
+        formatters["generic"] = {"()": "logging.Formatter", "fmt": _DEFAULT_FORMATTER_FMT}
+    if formatters.get("access") is None:
+        formatters["access"] = {"()": "logging.Formatter", "fmt": _DEFAULT_FORMATTER_FMT}
 
     existing_logging_config = cast(
         "Optional[LoggingConfig]",
@@ -1141,46 +1141,20 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
     )
 
     if existing_logging_config is not None:
-        # Build the Granian dictconfig from the user's LoggingConfig snapshot.
-        # Do not call ``existing_logging_config.configure()`` here — the
-        # ``GranianPlugin.on_app_init`` hook already configured parent-process
-        # logging, and re-applying it from an unrelated codepath causes
-        # double-configuration surprises (and breaks on platforms where the
-        # handler class cannot be instantiated a second time).
-        # Whitelist only the keys ``logging.config.dictConfig`` understands;
-        # Litestar-specific fields like ``exception_logging_handler`` hold
-        # callables that would break serialization downstream.
-        dictconfig_keys = {
-            "formatters",
-            "filters",
-            "handlers",
-            "loggers",
-            "root",
-            "disable_existing_loggers",
-        }
+        dictconfig_keys = {"formatters", "filters", "handlers", "loggers", "root", "disable_existing_loggers"}
         log_dictconfig = {
             field.name: copy.deepcopy(getattr(existing_logging_config, field.name))
             for field in fields(existing_logging_config)
-            if field.name in dictconfig_keys
-            and getattr(existing_logging_config, field.name) is not None
+            if field.name in dictconfig_keys and getattr(existing_logging_config, field.name) is not None
         }
-
-        loggers = log_dictconfig.setdefault("loggers", {})
+        loggers: dict[str, Any] = log_dictconfig.setdefault("loggers", {})
         if loggers.get("_granian") is None:
-            loggers["_granian"] = {
-                "level": "INFO",
-                "handlers": ["console"],
-                "propagate": False,
-            }
+            loggers["_granian"] = {"level": "INFO", "handlers": ["console"], "propagate": False}
         if loggers.get("granian.access") is None:
-            loggers["granian.access"] = {
-                "level": "INFO",
-                "handlers": ["console"],
-                "propagate": False,
-            }
-        formatters = log_dictconfig.setdefault("formatters", {})
-        if formatters.get("generic") is None:
-            formatters["generic"] = formatters.get("standard", {"format": _DEFAULT_FORMATTER_FMT})
+            loggers["granian.access"] = {"level": "INFO", "handlers": ["console"], "propagate": False}
+        fmts: dict[str, Any] = log_dictconfig.setdefault("formatters", {})
+        if fmts.get("generic") is None:
+            fmts["generic"] = fmts.get("standard", {"format": _DEFAULT_FORMATTER_FMT})
 
     _neutralize_queue_handlers_for_platform(log_dictconfig)
     log_dictconfig["version"] = 1

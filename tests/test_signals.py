@@ -164,7 +164,8 @@ def test_subprocess_keyboard_interrupt_sends_sigterm_on_unix() -> None:
 
 def test_log_config_tempfile_is_cleaned_up_on_normal_exit(tmp_path: Path) -> None:
     """When --use-litestar-logger is set, the temp log-config file must be
-    removed when the subprocess exits."""
+    removed when the subprocess exits.
+    """
     from litestar.logging.config import LoggingConfig
 
     env = MagicMock()

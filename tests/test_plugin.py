@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pytest
 from click import Group
 from litestar.config.app import AppConfig
@@ -9,9 +7,6 @@ from litestar.logging.config import LoggingConfig
 from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
 
 from litestar_granian.plugin import GranianPlugin, _inject_granian_loggers
-
-if TYPE_CHECKING:
-    pass
 
 
 class MockCLIPlugin(InitPluginProtocol, CLIPluginProtocol):
