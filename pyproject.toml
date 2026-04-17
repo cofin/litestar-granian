@@ -68,6 +68,8 @@ allow-direct-references = true
 # Test environment with test-only dependencies
 [dependency-groups]
 dev = [
+  # - Release
+  "bump-my-version",
   # - Documentation
   "sphinx>=7.1.2",
   "sphinx-autobuild>=2021.3.14",
@@ -320,6 +322,51 @@ packages = "litestar_granian,tests,docs"
 disable_error_code = "attr-defined"
 disallow_untyped_decorators = false
 module = "tests.*"
+
+[tool.bumpversion]
+allow_dirty = true
+commit = false
+commit_args = "--no-verify"
+current_version = "0.14.2"
+ignore_missing_files = false
+ignore_missing_version = false
+message = "chore(release): bump to v{new_version}"
+parse = """(?x)
+    (?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)
+    (-(?P<pre>alpha|beta|rc)\\.(?P<pre_n>\\d+))?
+"""
+regex = false
+replace = "{new_version}"
+search = "{current_version}"
+serialize = ["{major}.{minor}.{patch}", "{major}.{minor}.{patch}-{pre}.{pre_n}"]
+sign_tags = false
+tag = false
+tag_message = "chore(release): v{new_version}"
+tag_name = "v{new_version}"
+
+[tool.bumpversion.parts.pre]
+first_value = "stable"
+optional_value = "stable"
+values = ["alpha", "beta", "rc", "stable"]
+
+[tool.bumpversion.parts.pre_n]
+first_value = "1"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+replace = 'version = "{new_version}"'
+search = 'version = "{current_version}"'
+
+[[tool.bumpversion.files]]
+filename = "uv.lock"
+replace = """
+name = "litestar-granian"
+version = "{new_version}"
+"""
+search = """
+name = "litestar-granian"
+version = "{current_version}"
+"""
 
 [tool.codespell]
 ignore-words-list = ["granian"]
