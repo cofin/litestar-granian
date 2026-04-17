@@ -1,6 +1,6 @@
-===================
+====================
 Direct vs subprocess
-===================
+====================
 
 ``litestar-granian`` can run Granian in two modes. Both are available via
 ``--in-subprocess`` / ``--no-subprocess`` on ``litestar run``.

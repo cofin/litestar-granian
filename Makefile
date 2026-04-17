@@ -6,6 +6,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL:=help
 .ONESHELL:
+.SHELLFLAGS := -ec
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
@@ -41,8 +42,10 @@ install-uv:                                         ## Install latest version of
 	@echo "${OK} UV installed successfully"
 
 .PHONY: install
-install: clean                                      ## Install the project, dependencies, and pre-commit for local development
+install: destroy clean                              ## Install the project, dependencies, and pre-commit for local development
 	@echo "${INFO} Starting fresh installation..."
+	@uv python pin 3.12 >/dev/null 2>&1
+	@uv venv >/dev/null 2>&1
 	@uv sync --all-extras --dev
 	@echo "${OK} Installation complete! 🎉"
 
@@ -208,18 +211,18 @@ check-all: lint test-all coverage                  ## Run all checks (lint, test
 .PHONY: docs-clean
 docs-clean:                                        ## Clean documentation build
 	@echo "${INFO} Cleaning documentation build assets... 🧹"
-	@rm -rf docs/_build >/dev/null 2>&1
+	@rm -rf docs/_build
 	@echo "${OK} Documentation assets cleaned"
 
 .PHONY: docs-serve
 docs-serve: docs-clean                             ## Serve documentation locally
 	@echo "${INFO} Starting documentation server... 📚"
-	uv run sphinx-autobuild docs docs/_build/ -j auto --watch litestar_granian --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
+	@uv run sphinx-autobuild docs docs/_build/ -j 1 --watch litestar_granian --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
 
 .PHONY: docs
 docs: docs-clean                                   ## Build documentation
 	@echo "${INFO} Building documentation... 📝"
-	@uv run sphinx-build -M html docs docs/_build/ -E -a -j auto -W --keep-going
+	@PYTHONWARNINGS="ignore::FutureWarning" uv run sphinx-build -M html docs docs/_build/ -E -a -j 1 -W
 	@echo "${OK} Documentation built successfully"
 
 .PHONY: docs-linkcheck
