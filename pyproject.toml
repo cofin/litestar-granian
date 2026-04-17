@@ -33,7 +33,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "0.14.2"
+version = "0.15.0"
 
 [project.urls]
 Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
@@ -326,7 +326,7 @@ module = "tests.*"
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "0.14.2"
+current_version = "0.15.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
