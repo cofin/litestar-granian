@@ -1,18 +1,18 @@
-import enum
+import copy
 import multiprocessing
 import os
 import platform
 import signal
 import subprocess  # noqa: S404
 import sys
+import tempfile
 from dataclasses import fields
-from importlib.util import find_spec
 from pathlib import Path
-from time import sleep
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
 
-from granian.cli import Duration, _pretty_print_default
-from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, TaskImpl
+from granian.cli import Duration, OctalIntType, _pretty_print_default
+from granian.cli import EnumType as GranianEnumType
+from granian.constants import HTTPModes, Interfaces, Loops, RuntimeModes, SSLProtocols, TaskImpl
 from granian.errors import FatalError
 from granian.http import HTTP1Settings, HTTP2Settings
 from granian.log import LOGGING_CONFIG, LogLevels
@@ -26,70 +26,40 @@ from litestar.cli._utils import (
 )
 from litestar.cli.commands.core import _server_lifespan  # pyright: ignore[reportPrivateUsage]
 from litestar.logging import LoggingConfig
+from litestar.serialization import encode_json
 
 try:
     from rich_click import (
-        Choice,
         Command,
         Context,
         IntRange,
         Option,
-        Parameter,
         command,
     )
     from rich_click import Path as ClickPath
     from rich_click import option as click_option
 except ImportError:
     from click import (  # type: ignore[no-redef]
-        Choice,
         Command,
         Context,
         IntRange,
         Option,
-        Parameter,
         command,
     )
     from click import Path as ClickPath
-    from click import option as click_option
+    from click import option as click_option  # type: ignore[assignment]
 
 
 if TYPE_CHECKING:
     from litestar import Litestar
     from litestar.cli._utils import LitestarEnv  # pyright: ignore[reportPrivateImportUsage]
 
-UVLOOP_INSTALLED = find_spec("uvloop") is not None
-RLOOP_INSTALLED = find_spec("rloop") is not None
 
-
-class EnumType(Choice):
+class EnumType(GranianEnumType):
     """A click type for enums."""
 
-    def __init__(self, enum: enum.Enum, case_sensitive: bool = False) -> None:
-        """Initialize the EnumType."""
-        self.__enum = enum
-        super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)  # type: ignore
-
-    def convert(self, value: Any, param: "Optional[Parameter]", ctx: "Optional[Context]") -> "enum.Enum":
-        """Convert a value to an Enum member.
-
-        Takes a value and attempts to convert it to the corresponding Enum member. If the value is
-        already None or an Enum instance, it returns the value as-is. Otherwise, it converts the
-        value to a string and looks up the corresponding Enum member.
-
-        Args:
-            value: The value to convert to an Enum member
-            param: Optional Click Parameter object
-            ctx: Optional Click Context object
-
-        Returns:
-            enum.Enum: The Enum member corresponding to the value
-        """
-        """Convert the value to an Enum."""
-        if value is None or isinstance(value, enum.Enum):
-            return value  # type: ignore[return-value]
-
-        converted_str = super().convert(value, param, ctx)
-        return self.__enum(converted_str)  # type: ignore[no-any-return,operator]
+    def __init__(self, enum: Any, case_sensitive: bool = False) -> None:
+        super().__init__(enum, case_sensitive)
 
 
 _AnyCallable = Callable[..., Any]
@@ -100,7 +70,7 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     attrs["show_envvar"] = True
     if "default" in attrs:
         attrs["show_default"] = _pretty_print_default(attrs["default"])
-    return click_option(*param_decls, cls=cls, **attrs)  # type: ignore
+    return click_option(*param_decls, cls=cls, **attrs)  # pyright: ignore
 
 
 @command(name="run", context_settings={"show_default": True}, help="Start application server")
@@ -111,6 +81,13 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     "--uds",
     type=ClickPath(exists=False, writable=True),
     help="Unix Domain Socket path (experimental)",
+)
+@option(
+    "--uds-permissions",
+    type=OctalIntType(),
+    help="Unix Domain Socket permissions (octal)",
+    default=None,
+    show_default=False,
 )
 @option("--http", help="HTTP Version to use (HTTP or HTTP2)", type=HTTPModes, default=HTTPModes.auto.value)
 @option("-d", "--debug", help="Run app in debug mode", is_flag=True, envvar="LITESTAR_DEBUG")
@@ -134,9 +111,12 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--blocking-threads-idle-timeout",
-    type=IntRange(10, 600),
+    type=Duration(5, 600),
     default=30,
-    help="The maximum amount of time in seconds an idle blocking thread will be kept alive",
+    help=(
+        "The maximum amount of time an idle blocking thread will be kept alive "
+        "(supports human-readable format like '5m', '30s')"
+    ),
 )
 @option("--runtime-threads", type=IntRange(1), default=1, help="Number of runtime threads (per worker)")
 @option(
@@ -146,19 +126,19 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--runtime-mode",
-    type=EnumType(RuntimeModes),  # type: ignore[arg-type]
-    default=RuntimeModes.st,
-    help="Runtime mode to use (single/multi threaded)",
+    type=EnumType(RuntimeModes),
+    default=RuntimeModes.auto,
+    help="Runtime mode to use (single/multi threaded/auto-detect)",
 )
 @option(
     "--loop",
-    type=EnumType(Loops),  # type: ignore[arg-type]
-    default=Loops.uvloop if UVLOOP_INSTALLED else Loops.rloop if RLOOP_INSTALLED else Loops.auto,
+    type=EnumType(Loops),
+    default=Loops.auto,
     help="Event loop implementation",
 )
 @option(
     "--task-impl",
-    type=EnumType(TaskImpl),  # type: ignore[arg-type]
+    type=EnumType(TaskImpl),
     default=TaskImpl.asyncio,
     help="Async task implementation to use",
 )
@@ -233,8 +213,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--http2-keep-alive-timeout",
-    help="Sets a timeout for receiving an acknowledgement of the HTTP2 keep-alive ping",
-    type=int,
+    help=(
+        "Sets a timeout for receiving an acknowledgement of the HTTP2 keep-alive ping "
+        "(supports human-readable format like '20s')"
+    ),
+    type=Duration(1),
     show_default=False,
     default=HTTP2Settings.keep_alive_timeout,
 )
@@ -267,14 +250,16 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     default=HTTP2Settings.max_send_buffer_size,
 )
 @option("--granian-log/--granian-no-log", "log_enabled", default=True, help="Enable logging")
-@option("--granian-log-level", "log_level", type=EnumType(LogLevels), default=LogLevels.info, help="Log level")  # type: ignore[arg-type]
+@option("--granian-log-level", "log_level", type=EnumType(LogLevels), default=LogLevels.info, help="Log level")
 @option("--granian-access-log/--granian-no-access-log", "log_access_enabled", default=False, help="Enable access log")
 @option("--granian-access-log-fmt", "log_access_fmt", help="Access log format")
 # SSL configuration
 @option(
     "--ssl-certificate",
+    "--ssl-certfile",
+    "ssl_certificate",
     type=ClickPath(file_okay=True, exists=False, dir_okay=False, readable=True),
-    help="SSL certificate file",
+    help="SSL certificate file (Uvicorn-compatible alias: --ssl-certfile)",
     default=None,
     show_default=False,
 )
@@ -292,6 +277,28 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     envvar="LITESTAR_CREATE_SELF_SIGNED_CERT",
 )
 @option("--ssl-keyfile-password", help="SSL key password")
+@option(
+    "--ssl-protocol-min",
+    type=EnumType(SSLProtocols),
+    default=SSLProtocols.tls13,
+    help="Set the minimum supported protocol for SSL connections.",
+)
+@option(
+    "--ssl-ca",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    help="Root SSL certificate file for client verification",
+)
+@option(
+    "--ssl-crl",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    help="SSL CRL file(s)",
+    multiple=True,
+)
+@option(
+    "--ssl-client-verify/--no-ssl-client-verify",
+    default=False,
+    help="Verify clients SSL certificates",
+)
 # Logging configuration
 @option("--url-path-prefix", help="URL path prefix the app is mounted on", default=None, show_default=False)
 # Worker lifecycle
@@ -313,8 +320,11 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--workers-kill-timeout",
-    type=IntRange(1, 1800),
-    help="The amount of time in seconds to wait for killing workers that refused to gracefully stop",
+    type=Duration(1, 1800),
+    help=(
+        "The amount of time to wait for killing workers that refused to gracefully stop "
+        "(supports human-readable format like '5s', '1m')"
+    ),
     default=5,
     show_default="disabled",
 )
@@ -322,6 +332,18 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     "--workers-max-rss",
     type=IntRange(1),
     help="The maximum amount of memory (in MiB) a worker can consume before respawn",
+)
+@option(
+    "--rss-sample-interval",
+    type=Duration(1, 300),
+    default=30,
+    help="The sample rate in seconds (or a human-readable duration) for the resource monitor",
+)
+@option(
+    "--rss-samples",
+    type=IntRange(1),
+    default=1,
+    help="The number of consecutive samples to consider a worker over resource limit",
 )
 # Development & Debug options
 @option(
@@ -333,16 +355,21 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 )
 @option(
     "--reload-paths",
+    "--reload-include",
+    "reload_paths",
     type=ClickPath(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
-    help="Paths to watch for changes",
+    help="Paths to watch for changes (Uvicorn-compatible alias: --reload-include)",
     show_default="Working directory",
     multiple=True,
 )
 @option(
     "--reload-ignore-dirs",
+    "--reload-exclude",
+    "reload_ignore_dirs",
     help=(
         "Names of directories to ignore changes for. "
-        "Extends the default list of directories to ignore in watchfiles' default filter"
+        "Extends the default list of directories to ignore in watchfiles' default filter. "
+        "Uvicorn-compatible alias: --reload-exclude"
     ),
     multiple=True,
 )
@@ -359,6 +386,17 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     type=ClickPath(exists=False, path_type=Path),  # type: ignore[type-var]
     help="Absolute paths to ignore changes for",
     multiple=True,
+)
+@option(
+    "--reload-tick",
+    type=IntRange(50, 5000),
+    help="The tick frequency (in milliseconds) the reloader watch for changes",
+    default=50,
+)
+@option(
+    "--reload-ignore-worker-failure/--no-reload-ignore-worker-failure",
+    default=False,
+    help="Ignore worker failures when auto reload is enabled",
 )
 # Process management
 @option(
@@ -381,20 +419,38 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
 # Static file serving (Granian server-level)
 @option(
     "--static-path-route",
-    help="URL route prefix for static files served by Granian (server-level performance)",
-    default="/static",
-    show_default=True,
+    help=(
+        "URL route prefix for Granian-served static files. Repeat for multi-mount; "
+        "paired positionally with --static-path-mount."
+    ),
+    multiple=True,
 )
 @option(
     "--static-path-mount",
     type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
-    help="Directory path to serve static files from via Granian (server-level)",
+    help=(
+        "Directory path for Granian to serve static files from. Repeat for multi-mount; "
+        "paired positionally with --static-path-route."
+    ),
+    multiple=True,
+)
+@option(
+    "--static-path-dir-to-file",
+    type=str,
+    default=None,
+    help=(
+        "Filename to serve for directory requests under a static mount (e.g. 'index.html'). "
+        "Enables HTML mode for SPA-style serving."
+    ),
 )
 @option(
     "--static-path-expires",
-    type=IntRange(min=60),
+    type=Duration(0),
     default=86400,
-    help="Cache expiration time in seconds for Granian static files",
+    help=(
+        "Cache expiration for Granian static files (supports human-readable format like '1d', '1h'). "
+        "Pass 0 to disable caching."
+    ),
     show_default=True,
 )
 @option(
@@ -403,6 +459,54 @@ def option(*param_decls: str, cls: "Optional[type[Option]]" = None, **attrs: Any
     default=True,
     help="Launch Granian in a subprocess.",
     envvar="LITESTAR_GRANIAN_IN_SUBPROCESS",
+)
+@option(
+    "--working-dir",
+    type=ClickPath(exists=True, file_okay=False, dir_okay=True, readable=True, path_type=Path),  # type: ignore[type-var]
+    default=None,
+    help="Working directory to use when starting Granian workers.",
+)
+@option(
+    "--env-files",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    multiple=True,
+    help="One or more dotenv files to load before starting workers (repeatable).",
+)
+@option(
+    "--log-config",
+    type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
+    default=None,
+    help=(
+        "Path to a JSON file containing a logging dictConfig. Takes precedence over "
+        "--use-litestar-logger when both are set."
+    ),
+)
+@option(
+    "--metrics/--no-metrics",
+    "metrics_enabled",
+    default=False,
+    is_flag=True,
+    help="Enable Granian's built-in Prometheus metrics endpoint.",
+)
+@option(
+    "--metrics-scrape-interval",
+    type=Duration(1, 60),
+    default=15,
+    help="Metrics sample interval (supports human-readable format like '15s', '1m').",
+)
+@option(
+    "--metrics-address",
+    type=str,
+    default="127.0.0.1",
+    help="Address to bind the metrics endpoint to.",
+    show_default=True,
+)
+@option(
+    "--metrics-port",
+    type=IntRange(1, 65535),
+    default=9090,
+    help="Port to bind the metrics endpoint to.",
+    show_default=True,
 )
 @option(
     "--use-litestar-logger/--no-litestar-logger",
@@ -416,6 +520,7 @@ def run_command(
     host: str,
     port: int,
     uds: Optional[str],
+    uds_permissions: Optional[int],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -447,6 +552,10 @@ def run_command(
     ssl_certificate: Optional[Path],
     ssl_keyfile: Optional[Path],
     ssl_keyfile_password: Optional[str],
+    ssl_protocol_min: "SSLProtocols",
+    ssl_ca: Optional[Path],
+    ssl_crl: Optional[list[Path]],
+    ssl_client_verify: bool,
     create_self_signed_cert: bool,
     url_path_prefix: Optional[str],
     respawn_failed_workers: bool,
@@ -454,20 +563,32 @@ def run_command(
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
     workers_max_rss: Optional[int],
+    rss_sample_interval: int,
+    rss_samples: int,
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
     reload_ignore_patterns: Optional[list[str]],
     reload_ignore_paths: Optional[list[Path]],
+    reload_tick: int,
+    reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
     debug: bool,
     pdb: bool,
     in_subprocess: bool,
+    working_dir: Optional[Path],
+    env_files: "tuple[Path, ...]",
+    log_config: Optional[Path],
+    metrics_enabled: bool,
+    metrics_scrape_interval: int,
+    metrics_address: str,
+    metrics_port: int,
     use_litestar_logger: bool,
     ctx: Context,
 ) -> None:  # sourcery skip: low-code-quality
@@ -480,9 +601,6 @@ def run_command(
     instance.
     """
 
-    if reload:
-        # code fails to fully reload unless this is set to true
-        in_subprocess = True
     if debug:
         app.debug = True
         os.environ["LITESTAR_DEBUG"] = "1"
@@ -501,18 +619,21 @@ def run_command(
     env: LitestarEnv = ctx.obj
     del ctx
     workers = wc
+
+    if not metrics_enabled and _has_prometheus_plugin(env.app):
+        metrics_enabled = True
+        console.print(
+            "[cyan]auto-metrics:[/] PrometheusPlugin detected; enabling Granian metrics endpoint "
+            f"on {metrics_address}:{metrics_port}."
+        )
+
     if create_self_signed_cert:
         cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
         ssl_certificate = ssl_certificate or Path(cert) if cert is not None else None  # pyright: ignore[reportUnnecessaryComparison]
         ssl_keyfile = ssl_keyfile or Path(key) if key is not None else None  # pyright: ignore[reportUnnecessaryComparison]
 
     if not quiet_console and isatty():
-        if UVLOOP_INSTALLED and loop in {Loops.uvloop, Loops.auto}:
-            msg = "Starting [blue]Granian[/] server process with [green]uvloop[/]"
-        elif RLOOP_INSTALLED and loop in {Loops.rloop, Loops.auto}:
-            msg = "Starting [blue]Granian[/] server process with [green]rloop[/]"
-        else:
-            msg = "Starting [blue]Granian[/] server process"
+        msg = "Starting [blue]Granian[/] server process"
         console.rule(msg, align="left")
         show_app_info(env.app)
     with _server_lifespan(env.app):
@@ -552,24 +673,42 @@ def run_command(
                 ssl_certificate=ssl_certificate,
                 ssl_keyfile=ssl_keyfile,
                 ssl_keyfile_password=ssl_keyfile_password,
+                ssl_protocol_min=ssl_protocol_min,
+                ssl_ca=ssl_ca,
+                ssl_crl=ssl_crl,
+                ssl_client_verify=ssl_client_verify,
                 url_path_prefix=url_path_prefix,
                 respawn_failed_workers=respawn_failed_workers,
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
                 workers_max_rss=workers_max_rss,
+                rss_sample_interval=rss_sample_interval,
+                rss_samples=rss_samples,
                 uds=uds,
+                uds_permissions=uds_permissions,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
                 reload_ignore_dirs=reload_ignore_dirs,
                 reload_ignore_patterns=reload_ignore_patterns,
+                reload_tick=reload_tick,
+                reload_ignore_worker_failure=reload_ignore_worker_failure,
                 process_name=process_name,
                 pid_file=pid_file,
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
+                static_path_dir_to_file=static_path_dir_to_file,
                 static_path_expires=static_path_expires,
                 ws_enabled=ws_enabled,
+                working_dir=working_dir,
+                env_files=env_files,
+                log_config=log_config,
+                metrics_enabled=metrics_enabled,
+                metrics_scrape_interval=metrics_scrape_interval,
+                metrics_address=metrics_address,
+                metrics_port=metrics_port,
+                use_litestar_logger=use_litestar_logger,
             )
         else:
             _run_granian(
@@ -607,24 +746,41 @@ def run_command(
                 ssl_certificate=ssl_certificate,
                 ssl_keyfile=ssl_keyfile,
                 ssl_keyfile_password=ssl_keyfile_password,
+                ssl_protocol_min=ssl_protocol_min,
+                ssl_ca=ssl_ca,
+                ssl_crl=ssl_crl,
+                ssl_client_verify=ssl_client_verify,
                 url_path_prefix=url_path_prefix,
                 respawn_failed_workers=respawn_failed_workers,
                 respawn_interval=respawn_interval,
                 workers_lifetime=workers_lifetime,
                 workers_kill_timeout=workers_kill_timeout,
                 workers_max_rss=workers_max_rss,
+                rss_sample_interval=rss_sample_interval,
+                rss_samples=rss_samples,
                 uds=uds,
+                uds_permissions=uds_permissions,
                 reload=reload,
                 reload_paths=reload_paths,
                 reload_ignore_paths=reload_ignore_paths,
                 reload_ignore_dirs=reload_ignore_dirs,
                 reload_ignore_patterns=reload_ignore_patterns,
+                reload_tick=reload_tick,
+                reload_ignore_worker_failure=reload_ignore_worker_failure,
                 process_name=process_name,
                 pid_file=pid_file,
                 static_path_route=static_path_route,
                 static_path_mount=static_path_mount,
+                static_path_dir_to_file=static_path_dir_to_file,
                 static_path_expires=static_path_expires,
                 ws_enabled=ws_enabled,
+                working_dir=working_dir,
+                env_files=env_files,
+                log_config=log_config,
+                metrics_enabled=metrics_enabled,
+                metrics_scrape_interval=metrics_scrape_interval,
+                metrics_address=metrics_address,
+                metrics_port=metrics_port,
                 use_litestar_logger=use_litestar_logger,
             )
 
@@ -634,6 +790,7 @@ def _run_granian(
     host: str,
     port: int,
     uds: Optional[str],
+    uds_permissions: Optional[int],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -665,26 +822,50 @@ def _run_granian(
     ssl_certificate: Optional[Path],
     ssl_keyfile: Optional[Path],
     ssl_keyfile_password: Optional[str],
+    ssl_protocol_min: "SSLProtocols",
+    ssl_ca: Optional[Path],
+    ssl_crl: Optional[list[Path]],
+    ssl_client_verify: bool,
     url_path_prefix: Optional[str],
     respawn_failed_workers: bool,
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
     workers_max_rss: Optional[int],
+    rss_sample_interval: int,
+    rss_samples: int,
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
     reload_ignore_patterns: Optional[list[str]],
     reload_ignore_paths: Optional[list[Path]],
+    reload_tick: int,
+    reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
+    working_dir: Optional[Path],
+    env_files: "tuple[Path, ...]",
+    log_config: Optional[Path],
+    metrics_enabled: bool,
+    metrics_scrape_interval: int,
+    metrics_address: str,
+    metrics_port: int,
     use_litestar_logger: bool,
 ) -> None:
-    log_dictconfig = _get_logging_config(env, use_litestar_logger)
+    if reload:
+        multiprocessing.set_start_method("spawn", force=True)
+
+    if log_config is not None:
+        import json as _json
+
+        log_dictconfig = _json.loads(Path(log_config).read_text(encoding="utf-8"))
+    else:
+        log_dictconfig = _get_logging_config(env, use_litestar_logger)
     if http.value == HTTPModes.http2.value:
         http1_settings = None
         http2_settings = HTTP2Settings(
@@ -709,14 +890,6 @@ def _run_granian(
         http2_settings = None
     app_path = env.app_path
     is_factory = env.is_app_factory
-    if reload:
-        module_path = app_path.split(":")[0]
-        loaded_modules = [m for m in sys.modules if m.startswith(module_path.split(".")[0])]
-        for m in loaded_modules:
-            del sys.modules[m]
-        if module_path in sys.modules:
-            del sys.modules[module_path]
-        del loaded_modules, env
     # Build server arguments
     server_args: dict[str, Any] = {
         "address": host,
@@ -744,28 +917,49 @@ def _run_granian(
         "ssl_cert": ssl_certificate,
         "ssl_key": ssl_keyfile,
         "ssl_key_password": ssl_keyfile_password,
+        "ssl_protocol_min": ssl_protocol_min,
+        "ssl_ca": ssl_ca,
+        "ssl_crl": ssl_crl,
+        "ssl_client_verify": ssl_client_verify,
         "url_path_prefix": url_path_prefix,
         "respawn_failed_workers": respawn_failed_workers,
         "respawn_interval": respawn_interval,
         "workers_lifetime": workers_lifetime,
         "workers_kill_timeout": workers_kill_timeout,
         "workers_max_rss": workers_max_rss,
+        "rss_sample_interval": rss_sample_interval,
+        "rss_samples": rss_samples,
         "uds": Path(uds) if uds else None,
+        "uds_permissions": uds_permissions,
         "factory": is_factory,
         "reload": reload,
         "reload_paths": reload_paths,
         "reload_ignore_paths": reload_ignore_paths,
         "reload_ignore_dirs": reload_ignore_dirs,
         "reload_ignore_patterns": reload_ignore_patterns,
+        "reload_tick": reload_tick,
+        "reload_ignore_worker_failure": reload_ignore_worker_failure,
         "process_name": process_name,
         "pid_file": pid_file,
     }
 
-    # Add static file parameters only if static_path_mount is configured
-    if static_path_mount is not None:
-        server_args["static_path_route"] = static_path_route
-        server_args["static_path_mount"] = static_path_mount
+    if static_path_mount:
+        server_args["static_path_route"] = list(static_path_route)
+        server_args["static_path_mount"] = [Path(p) for p in static_path_mount]
         server_args["static_path_expires"] = static_path_expires
+        if static_path_dir_to_file is not None:
+            server_args["static_path_dir_to_file"] = static_path_dir_to_file
+
+    if working_dir is not None:
+        server_args["working_dir"] = working_dir
+    if env_files:
+        server_args["env_files"] = [Path(p) for p in env_files]
+
+    server_args["metrics_enabled"] = metrics_enabled
+    if metrics_enabled:
+        server_args["metrics_scrape_interval"] = metrics_scrape_interval
+        server_args["metrics_address"] = metrics_address
+        server_args["metrics_port"] = metrics_port
 
     server = Granian(app_path, **server_args)
 
@@ -774,32 +968,94 @@ def _run_granian(
     except FatalError as e:
         console.print(f"[red]Fatal Granian error: {e}[/]")
         sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("[yellow]Granian workers stopped[/]")
     else:
         console.print("[yellow]Granian workers stopped[/]")
 
 
+_DEFAULT_FORMATTER_FMT = "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"
+_QUEUE_HANDLER_CLASSES = (
+    "litestar.logging.standard.QueueListenerHandler",
+    "logging.handlers.QueueHandler",
+    "logging.handlers.QueueListener",
+)
+
+
+def _has_prometheus_plugin(app: "Litestar") -> bool:
+    """Return True if Litestar's PrometheusPlugin is installed on the app."""
+    try:
+        prometheus_mod: Any = __import__("litestar.plugins.prometheus", fromlist=["PrometheusPlugin"])
+    except ImportError:
+        return False
+    plugin_cls = getattr(prometheus_mod, "PrometheusPlugin", None)
+    if plugin_cls is None:
+        return False
+    plugins = getattr(app, "plugins", []) or []
+    return any(isinstance(p, plugin_cls) for p in plugins)
+
+
+def _is_queue_handler(handler: dict[str, Any]) -> bool:
+    handler_class = handler.get("class") or handler.get("()")
+    if isinstance(handler_class, str) and any(cls in handler_class for cls in _QUEUE_HANDLER_CLASSES):
+        return True
+    return "listener" in handler
+
+
+def _neutralize_queue_handlers_for_platform(log_dictconfig: dict[str, Any]) -> None:
+    """Rewrite queue-based handlers to ``StreamHandler`` on spawn platforms.
+
+    On Linux (fork workers), each worker calls ``dictConfig`` fresh so queue
+    listeners are safe. On macOS / Windows (spawn), multiple worker processes
+    would each spin a listener thread racing on stdout — the root cause of
+    #21 / #41's "logs after close" and interleaved output. ``StreamHandler``
+    has no background thread and flushes on write.
+    """
+    current_platform: str = sys.platform
+    if current_platform == "linux":
+        return
+    handlers = log_dictconfig.get("handlers")
+    if not isinstance(handlers, dict):
+        return
+    for name, handler in list(handlers.items()):
+        if not isinstance(handler, dict) or not _is_queue_handler(handler):
+            continue
+        replacement: dict[str, Any] = {"class": "logging.StreamHandler"}
+        if "formatter" in handler:
+            replacement["formatter"] = handler["formatter"]
+        if "level" in handler:
+            replacement["level"] = handler["level"]
+        handlers[name] = replacement
+
+
 def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[str, Any]:
-    """Get the logging config for the Granian server.
+    """Build a safe logging dictconfig for the Granian server.
+
+    Always returns a fresh copy — never the shared ``granian.log.LOGGING_CONFIG``
+    module dict. On spawn platforms, queue-based handlers are neutralized to
+    ``StreamHandler`` to avoid worker-process listener races.
 
     Args:
-        env: The Litestar environment
-        use_litestar_logger: Whether to use the Litestar logger
+        env: The Litestar environment.
+        use_litestar_logger: Whether to derive the config from the user's
+            ``LoggingConfig`` instead of Granian's defaults.
 
     Returns:
-        dict[str, Any]: The logging configuration dictionary
+        A dictConfig-ready mapping with ``version: 1`` set.
     """
+    log_dictconfig: dict[str, Any] = copy.deepcopy(LOGGING_CONFIG)
+
     if not use_litestar_logger:
-        return LOGGING_CONFIG
-    LOGGING_CONFIG["formatters"] = {
-        "generic": {
-            "()": "logging.Formatter",
-            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
-        },
-        "access": {
-            "()": "logging.Formatter",
-            "fmt": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s",
-        },
-    }
+        _neutralize_queue_handlers_for_platform(log_dictconfig)
+        log_dictconfig["version"] = 1
+        return log_dictconfig
+
+    formatters: dict[str, Any] = log_dictconfig.setdefault("formatters", {})
+    if formatters.get("generic") is None:
+        formatters["generic"] = {"()": "logging.Formatter", "fmt": _DEFAULT_FORMATTER_FMT}
+    if formatters.get("access") is None:
+        formatters["access"] = {"()": "logging.Formatter", "fmt": _DEFAULT_FORMATTER_FMT}
+
     existing_logging_config = cast(
         "Optional[LoggingConfig]",
         env.app.logging_config.standard_lib_logging_config  # pyright: ignore[reportAttributeAccessIssue]
@@ -808,38 +1064,25 @@ def _get_logging_config(env: "LitestarEnv", use_litestar_logger: bool) -> dict[s
         if env.app.logging_config is not None and isinstance(env.app.logging_config, LoggingConfig)
         else None,
     )
+
     if existing_logging_config is not None:
-        if existing_logging_config.loggers.get("_granian", None) is None:
-            LOGGING_CONFIG["loggers"] = {
-                "_granian": {"handlers": ["console"], "level": "INFO", "propagate": False},
-                "granian.access": {"handlers": ["console"], "level": "INFO", "propagate": False},
-            }
-            existing_logging_config.loggers.update({
-                "_granian": {"level": "INFO", "handlers": ["console"], "propagate": False},
-                "granian.access": {"level": "INFO", "handlers": ["console"], "propagate": False},
-            })
-        if existing_logging_config.formatters.get("generic", None) is None:
-            existing_logging_config.formatters.update(
-                {
-                    "generic": existing_logging_config.formatters.get(
-                        "standard",
-                        {"format": "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"},
-                    ),
-                },
-            )
-        existing_logging_config.configure()
-    excluded_fields = {"configure_root_logger", "incremental"}
-    log_dictconfig = (
-        {
-            _field.name: getattr(existing_logging_config, _field.name)
-            for _field in fields(existing_logging_config)
-            if getattr(existing_logging_config, _field.name) is not None and _field.name not in excluded_fields
+        dictconfig_keys = {"formatters", "filters", "handlers", "loggers", "root", "disable_existing_loggers"}
+        log_dictconfig = {
+            field.name: copy.deepcopy(getattr(existing_logging_config, field.name))
+            for field in fields(existing_logging_config)
+            if field.name in dictconfig_keys and getattr(existing_logging_config, field.name) is not None
         }
-        if existing_logging_config is not None
-        else LOGGING_CONFIG
-    )
-    if log_dictconfig is not None:
-        log_dictconfig["version"] = 1
+        loggers: dict[str, Any] = log_dictconfig.setdefault("loggers", {})
+        if loggers.get("_granian") is None:
+            loggers["_granian"] = {"level": "INFO", "handlers": ["console"], "propagate": False}
+        if loggers.get("granian.access") is None:
+            loggers["granian.access"] = {"level": "INFO", "handlers": ["console"], "propagate": False}
+        fmts: dict[str, Any] = log_dictconfig.setdefault("formatters", {})
+        if fmts.get("generic") is None:
+            fmts["generic"] = fmts.get("standard", {"format": _DEFAULT_FORMATTER_FMT})
+
+    _neutralize_queue_handlers_for_platform(log_dictconfig)
+    log_dictconfig["version"] = 1
     return log_dictconfig
 
 
@@ -865,6 +1108,7 @@ def _run_granian_in_subprocess(
     host: str,
     port: int,
     uds: Optional[str],
+    uds_permissions: Optional[int],
     http: "HTTPModes",
     wc: int,
     blocking_threads: Optional[int],
@@ -896,23 +1140,40 @@ def _run_granian_in_subprocess(
     ssl_certificate: Optional[Path],
     ssl_keyfile: Optional[Path],
     ssl_keyfile_password: Optional[str],
+    ssl_protocol_min: "SSLProtocols",
+    ssl_ca: Optional[Path],
+    ssl_crl: Optional[list[Path]],
+    ssl_client_verify: bool,
     url_path_prefix: Optional[str],
     respawn_failed_workers: bool,
     respawn_interval: float,
     workers_lifetime: Optional[int],
     workers_kill_timeout: Optional[int],
     workers_max_rss: Optional[int],
+    rss_sample_interval: int,
+    rss_samples: int,
     reload: bool,
     reload_paths: Optional[list[Path]],
     reload_ignore_dirs: Optional[list[str]],
     reload_ignore_patterns: Optional[list[str]],
     reload_ignore_paths: Optional[list[Path]],
+    reload_tick: int,
+    reload_ignore_worker_failure: bool,
     process_name: Optional[str],
     pid_file: Optional[Path],
-    static_path_route: str,
-    static_path_mount: Optional[Path],
+    static_path_route: "tuple[str, ...]",
+    static_path_mount: "tuple[Path, ...]",
+    static_path_dir_to_file: Optional[str],
     static_path_expires: int,
     ws_enabled: bool,
+    working_dir: Optional[Path] = None,
+    env_files: "tuple[Path, ...]" = (),
+    log_config: Optional[Path] = None,
+    metrics_enabled: bool = False,
+    metrics_scrape_interval: int = 15,
+    metrics_address: str = "127.0.0.1",
+    metrics_port: int = 9090,
+    use_litestar_logger: bool = False,
 ) -> None:
     process_args: dict[str, Any] = {
         "reload": reload,
@@ -926,11 +1187,17 @@ def _run_granian_in_subprocess(
         "task-impl": task_impl.value,
         "backlog": backlog,
         "log-level": log_level.value,
+        "ssl-protocol-min": ssl_protocol_min.value,
+        "ssl-client-verify": ssl_client_verify,
+        "rss-sample-interval": rss_sample_interval,
+        "rss-samples": rss_samples,
+        "reload-tick": reload_tick,
+        "reload-ignore-worker-failure": reload_ignore_worker_failure,
     }
     if env.is_app_factory:
         process_args["factory"] = env.is_app_factory
     if respawn_failed_workers:
-        process_args["respawn-interval"] = respawn_interval
+        process_args["respawn-failed-workers"] = True
     if respawn_interval:
         process_args["respawn-interval"] = respawn_interval
     if reload_paths:
@@ -955,12 +1222,12 @@ def _run_granian_in_subprocess(
         process_args["workers-max-rss"] = workers_max_rss
     if uds:
         process_args["uds"] = str(Path(uds).absolute())
+    if uds_permissions:
+        process_args["uds-permissions"] = uds_permissions
     if blocking_threads:
         process_args["blocking-threads"] = blocking_threads
-    if blocking_threads_idle_timeout:
-        process_args["blocking-threads-idle-timeout"] = blocking_threads_idle_timeout
-    if runtime_threads:
-        process_args["runtime-threads"] = runtime_threads
+    process_args["blocking-threads-idle-timeout"] = blocking_threads_idle_timeout
+    process_args["runtime-threads"] = runtime_threads
     if runtime_blocking_threads:
         process_args["runtime-blocking-threads"] = runtime_blocking_threads
     if runtime_mode:
@@ -994,34 +1261,81 @@ def _run_granian_in_subprocess(
         process_args["ssl-keyfile"] = ssl_keyfile
     if ssl_keyfile_password is not None:
         process_args["ssl-keyfile-password"] = ssl_keyfile_password
+    if ssl_ca is not None:
+        process_args["ssl-ca"] = ssl_ca
+    if ssl_crl is not None:
+        process_args["ssl-crl"] = ssl_crl
     if process_name is not None:
         process_args["process-name"] = process_name
     if pid_file is not None:
-        process_args["pid-file"] = Path(pid_file).absolute
-    if static_path_mount is not None:
-        process_args["static-path-route"] = static_path_route
-        process_args["static-path-mount"] = str(Path(static_path_mount).absolute())
+        process_args["pid-file"] = str(Path(pid_file).absolute())
+    if static_path_mount:
+        process_args["static-path-route"] = list(static_path_route)
+        process_args["static-path-mount"] = [str(Path(p).absolute()) for p in static_path_mount]
         process_args["static-path-expires"] = static_path_expires
+        if static_path_dir_to_file is not None:
+            process_args["static-path-dir-to-file"] = static_path_dir_to_file
+    if working_dir is not None:
+        process_args["working-dir"] = str(Path(working_dir).absolute())
+    if env_files:
+        process_args["env-files"] = [str(Path(p).absolute()) for p in env_files]
+    if metrics_enabled:
+        process_args["metrics"] = True
+        process_args["metrics-scrape-interval"] = metrics_scrape_interval
+        process_args["metrics-address"] = metrics_address
+        process_args["metrics-port"] = metrics_port
+
+    log_config_tempfile: Optional[Path] = None
+    if log_config is not None:
+        process_args["log-config"] = str(Path(log_config).absolute())
+    elif use_litestar_logger:
+        log_dictconfig = _get_logging_config(env, use_litestar_logger=True)
+        fd, log_config_path = tempfile.mkstemp(prefix="litestar-granian-logconf-", suffix=".json")
+        try:
+            with os.fdopen(fd, "wb") as fp:
+                fp.write(encode_json(log_dictconfig))
+        except Exception:
+            Path(log_config_path).unlink(missing_ok=True)
+            raise
+        log_config_tempfile = Path(log_config_path)
+        process_args["log-config"] = str(log_config_tempfile)
+
     command = [sys.executable, "-m", "granian", env.app_path, *_convert_granian_args(process_args)]
 
     process = subprocess.Popen(command, restore_signals=False)
 
+    # In subprocess mode, we want to let the child process handle SIGINT (Ctrl+C).
+    # Since the child is in the same process group, it will receive the signal
+    # directly from the terminal. If we don't ignore it here, the parent will
+    # catch KeyboardInterrupt and try to send SIGTERM to the child, causing a
+    # race condition and potential instability (double signal).
+    #
+    # We save the original handler to restore it later.
+    original_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     try:
-        while process.poll() is None:
-            sleep(1)
+        process.wait()
     except KeyboardInterrupt:
+        # This block might be reached if we receive a different signal that raises
+        # KeyboardInterrupt (unlikely with SIG_IGN for SIGINT), or if the
+        # wait is interrupted by another signal handler.
         if platform.system() == "Windows":
             process.send_signal(signal.CTRL_C_EVENT)  # type: ignore[attr-defined]
         else:
             process.send_signal(signal.SIGTERM)
     finally:
+        # Restore the original signal handler
+        signal.signal(signal.SIGINT, original_handler)
+
         # Always ensure the process is reaped
         try:
-            process.poll()  # Check if the process has terminated
-            if process.returncode is None:
-                process.wait()  # Wait if it hasn't
+            if process.poll() is None:
+                process.terminate()
+                process.wait()
         except KeyboardInterrupt:
             if platform.system() != "Windows":
                 process.send_signal(signal.SIGKILL)
             process.kill()
+        if log_config_tempfile is not None:
+            log_config_tempfile.unlink(missing_ok=True)
         console.print("[yellow]Granian workers stopped.[/]")

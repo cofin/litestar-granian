@@ -27,7 +27,6 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
     "sphinx_click",
-    "sphinx_toolbox.collapse",
     "sphinx_design",
 ]
 
@@ -60,6 +59,7 @@ nitpick_ignore = [
     (PY_CLASS, "ModelT"),
     (PY_CLASS, "T"),
     (PY_CLASS, "litestar_granian.cli.FC"),
+    (PY_CLASS, "granian.cli.EnumType"),
 ]
 nitpick_ignore_regex = [
     (PY_RE, r"litestar_granian.*\.T"),

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import operator
+import os
+import subprocess
 import sys
 from pathlib import Path
 from shutil import rmtree
@@ -154,6 +156,59 @@ def app_file(create_app_file: CreateAppFileFixture) -> Path:
 @pytest.fixture
 def runner() -> CliRunner:
     return CliRunner()
+
+
+class RunLitestarSubprocess(Protocol):
+    def __call__(
+        self,
+        app_module: str,
+        extra_args: list[str],
+        port: int,
+        *,
+        timeout: float = 30.0,
+    ) -> tuple[int, str]: ...
+
+
+@pytest.fixture
+def run_litestar_subprocess(tmp_project_dir: Path) -> RunLitestarSubprocess:
+    def _run(
+        app_module: str,
+        extra_args: list[str],
+        port: int,
+        *,
+        timeout: float = 30.0,
+    ) -> tuple[int, str]:
+        cmd = [
+            sys.executable,
+            "-m",
+            "litestar",
+            "--app",
+            f"{app_module}:app",
+            "run",
+            "--port",
+            str(port),
+            *extra_args,
+        ]
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(tmp_project_dir), env.get("PYTHONPATH", "")]))
+        env["PYTHONUNBUFFERED"] = "1"
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(tmp_project_dir),
+                timeout=timeout,
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+            return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            return -1, stdout + stderr
+
+    return _run
 
 
 @pytest.fixture

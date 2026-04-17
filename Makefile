@@ -6,6 +6,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL:=help
 .ONESHELL:
+.SHELLFLAGS := -ec
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
@@ -41,8 +42,10 @@ install-uv:                                         ## Install latest version of
 	@echo "${OK} UV installed successfully"
 
 .PHONY: install
-install: clean                                      ## Install the project, dependencies, and pre-commit for local development
+install: destroy clean                              ## Install the project, dependencies, and pre-commit for local development
 	@echo "${INFO} Starting fresh installation..."
+	@uv python pin 3.12 >/dev/null 2>&1
+	@uv venv >/dev/null 2>&1
 	@uv sync --all-extras --dev
 	@echo "${OK} Installation complete! 🎉"
 
@@ -79,6 +82,41 @@ build:                                             ## Build the project
 	@echo "${INFO} Building package... 📦"
 	@uv build
 	@echo "${OK} Package build complete"
+
+.PHONY: release
+release:                                           ## Bump version and create release tag: make release bump=patch|minor|major
+	@echo "${INFO} Preparing for release... 📦"
+	@make docs
+	@make clean
+	@make build
+	@uv run bump-my-version bump $(bump)
+	@uv lock --upgrade-package litestar-granian >/dev/null 2>&1
+	@echo "${OK} Release complete 🎉"
+
+.PHONY: pre-release
+pre-release:                                       ## Start a pre-release: make pre-release version=0.15.0-alpha.1
+	@if [ -z "$(version)" ]; then \
+		echo "${ERROR} Usage: make pre-release version=X.Y.Z-alpha.N"; \
+		echo ""; \
+		echo "Pre-release workflow:"; \
+		echo "  1. Start alpha:     make pre-release version=0.15.0-alpha.1"; \
+		echo "  2. Next alpha:      make pre-release version=0.15.0-alpha.2"; \
+		echo "  3. Move to beta:    make pre-release version=0.15.0-beta.1"; \
+		echo "  4. Move to rc:      make pre-release version=0.15.0-rc.1"; \
+		echo "  5. Final release:   make release bump=patch (from rc) OR bump=minor (from stable)"; \
+		exit 1; \
+	fi
+	@echo "${INFO} Preparing pre-release $(version)... 🧪"
+	@make clean
+	@make build
+	@uv run bump-my-version bump --new-version $(version) pre
+	@uv lock --upgrade-package litestar-granian >/dev/null 2>&1
+	@echo "${OK} Pre-release $(version) complete 🧪"
+	@echo ""
+	@echo "${INFO} Next steps:"
+	@echo "  1. Push: git push origin HEAD"
+	@echo "  2. Create a GitHub pre-release: gh release create v$(version) --prerelease --generate-notes --title 'v$(version)'"
+	@echo "  3. This will publish to PyPI with pre-release tags"
 
 # =============================================================================
 # Cleaning and Maintenance
@@ -173,18 +211,18 @@ check-all: lint test-all coverage                  ## Run all checks (lint, test
 .PHONY: docs-clean
 docs-clean:                                        ## Clean documentation build
 	@echo "${INFO} Cleaning documentation build assets... 🧹"
-	@rm -rf docs/_build >/dev/null 2>&1
+	@rm -rf docs/_build
 	@echo "${OK} Documentation assets cleaned"
 
 .PHONY: docs-serve
 docs-serve: docs-clean                             ## Serve documentation locally
 	@echo "${INFO} Starting documentation server... 📚"
-	uv run sphinx-autobuild docs docs/_build/ -j auto --watch litestar_granian --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
+	@uv run sphinx-autobuild docs docs/_build/ -j 1 --watch litestar_granian --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
 
 .PHONY: docs
 docs: docs-clean                                   ## Build documentation
 	@echo "${INFO} Building documentation... 📝"
-	@uv run sphinx-build -M html docs docs/_build/ -E -a -j auto -W --keep-going
+	@PYTHONWARNINGS="ignore::FutureWarning" uv run sphinx-build -M html docs docs/_build/ -E -a -j 1 -W
 	@echo "${OK} Documentation built successfully"
 
 .PHONY: docs-linkcheck

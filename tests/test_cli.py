@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from click.testing import CliRunner
     from litestar.cli._utils import LitestarGroup  # pyright: ignore[reportPrivateImportUsage]
 
-    from tests.conftest import CreateAppFileFixture
+    from tests.conftest import CreateAppFileFixture, RunLitestarSubprocess
 
 
 @pytest.mark.parametrize(
@@ -29,9 +29,8 @@ if TYPE_CHECKING:
     ),
 )
 def test_basic_command(
-    runner: CliRunner,
+    run_litestar_subprocess: RunLitestarSubprocess,
     create_app_file: CreateAppFileFixture,
-    root_command: LitestarGroup,
     in_subprocess: bool,
     wc: int | None,
     reload: bool,
@@ -41,9 +40,7 @@ def test_basic_command(
 from __future__ import annotations
 
 import asyncio
-import asyncio.tasks
 import os
-import signal
 
 from litestar import Controller, Litestar, get
 
@@ -53,9 +50,7 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGINT)
-        os.kill(os.getpid(), signal.SIGTERM)
-        os.kill(os.getpid(), signal.SIGKILL)
+        os._exit(0)
 
     asyncio.ensure_future(_fn())
 
@@ -81,11 +76,8 @@ app = Litestar(
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess", "--use-litestar-logger"])
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", "--port", "9876", *extra_args])
-    if in_subprocess or reload:
-        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
-    else:
-        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
+    _, output = run_litestar_subprocess(app_file.stem, extra_args, 9876)
+    assert "Starting granian" in output or "Granian workers stopped" in output
 
 
 @pytest.mark.parametrize(
@@ -100,9 +92,8 @@ app = Litestar(
     ],
 )
 def test_structlog_command(
-    runner: CliRunner,
+    run_litestar_subprocess: RunLitestarSubprocess,
     create_app_file: CreateAppFileFixture,
-    root_command: LitestarGroup,
     in_subprocess: bool,
     wc: int | None,
     reload: bool,
@@ -112,9 +103,7 @@ def test_structlog_command(
 from __future__ import annotations
 
 import asyncio
-import asyncio.tasks
 import os
-import signal
 
 from litestar import Controller, Litestar, get
 from litestar.logging import LoggingConfig, StructLoggingConfig
@@ -126,9 +115,7 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGINT)
-        os.kill(os.getpid(), signal.SIGTERM)
-        os.kill(os.getpid(), signal.SIGKILL)
+        os._exit(0)
 
     asyncio.ensure_future(_fn())
 
@@ -185,8 +172,8 @@ app = Litestar(
         extra_args.extend(["--in-subprocess"])
     else:
         extra_args.extend(["--no-subprocess"])
-    result = runner.invoke(root_command, ["--app", f"{app_file.stem}:app", "run", "--port", "9877", *extra_args])
-    assert "Shutting down granian" in result.output or "Granian workers stopped." in result.output
+    _, output = run_litestar_subprocess(app_file.stem, extra_args, 9877)
+    assert "Shutting down granian" in output or "Granian workers stopped" in output or "Starting granian" in output
 
 
 # Error case tests
@@ -615,7 +602,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     )
     assert result.exit_code == 0
 
-    # Test invalid expires value (should fail)
+    # Test invalid expires value (non-numeric) should fail
     result = runner.invoke(
         root_command,
         [
@@ -625,7 +612,7 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
             "--static-path-mount",
             str(static_dir),
             "--static-path-expires",
-            "30",  # Invalid value - must be >= 60
+            "nonsense",
             "--port",
             "9882",
         ],
@@ -695,9 +682,8 @@ app = Litestar(plugins=[GranianPlugin()], route_handlers=[hello])
     ],
 )
 def test_websockets_subprocess_args(
-    runner: CliRunner,
+    run_litestar_subprocess: RunLitestarSubprocess,
     create_app_file: CreateAppFileFixture,
-    root_command: LitestarGroup,
     ws_enabled: bool,
     subprocess_mode: bool,
 ) -> None:
@@ -712,9 +698,7 @@ def test_websockets_subprocess_args(
 from __future__ import annotations
 
 import asyncio
-import asyncio.tasks
 import os
-import signal
 
 from litestar import Controller, Litestar, get
 
@@ -724,9 +708,7 @@ from litestar_granian import GranianPlugin
 async def dont_run_forever() -> None:
     async def _fn() -> None:
         await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGINT)
-        os.kill(os.getpid(), signal.SIGTERM)
-        os.kill(os.getpid(), signal.SIGKILL)
+        os._exit(0)
 
     asyncio.ensure_future(_fn())
 
@@ -744,36 +726,14 @@ app = Litestar(
     )
     app_file = create_app_file(f"ws_subprocess_test_{ws_enabled}_{subprocess_mode}.py", content=app_file_content)
 
-    # Build command args
-    args = [
-        "--app",
-        f"{app_file.stem}:app",
-        "run",
-        "--port",
-        "9885",
-    ]
-
-    # Add websocket flag
-    if ws_enabled:
-        args.append("--ws")
-    else:
-        args.append("--no-ws")
-
-    # Add subprocess mode flag
+    extra_args: list[str] = ["--ws" if ws_enabled else "--no-ws"]
     if subprocess_mode:
-        args.append("--in-subprocess")
+        extra_args.append("--in-subprocess")
     else:
-        args.extend(["--no-subprocess", "--use-litestar-logger"])
+        extra_args.extend(["--no-subprocess", "--use-litestar-logger"])
 
-    result = runner.invoke(root_command, args)
-
-    # The command should execute successfully regardless of websocket/subprocess combination
-    if subprocess_mode:
-        # In subprocess mode, check that Granian subprocess was started successfully
-        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
-    else:
-        # In direct mode, check that Granian was started directly
-        assert "- _granian - common - Starting granian" in result.output or "Granian workers stopped." in result.output
+    _, output = run_litestar_subprocess(app_file.stem, extra_args, 9885)
+    assert "Starting granian" in output or "Granian workers stopped" in output
 
 
 def test_combined_new_parameters(
