@@ -65,10 +65,6 @@ New CLI options
   endpoint.
 - ``--metrics-scrape-interval`` / ``--metrics-address`` / ``--metrics-port``
   — configure the metrics endpoint.
-- ``--auto-static`` / ``--no-auto-static`` (default off) — map eligible
-  Litestar ``StaticFilesConfig`` entries to Granian's native static
-  serving. Only single-directory, local-filesystem configs without
-  guards or ``send_as_attachment`` are eligible.
 - Subprocess-mode forwarding of ``--use-litestar-logger`` now works:
   the parent serializes the computed dictconfig to a temp ``--log-config``
   file and passes its path to the child.

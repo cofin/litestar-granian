@@ -45,24 +45,6 @@ appear after ``"Granian workers stopped"``.
 on spawn platforms automatically. Linux configurations are passed
 through unchanged.
 
-Static files: auto-static
-=========================
-
-Pass ``--auto-static`` to map eligible
-``StaticFilesConfig`` entries onto Granian's native static serving.
-Eligibility:
-
-- Exactly one directory per entry.
-- Local filesystem (no custom ``file_system``).
-- No ``guards``.
-- ``send_as_attachment=False``.
-
-Matched routes bypass ASGI entirely — no Litestar middleware or guards
-will run for those requests. Entries that do not qualify are logged and
-skipped. ``create_static_files_router()`` closures are opaque to the
-detector and must be configured via ``--static-path-route`` /
-``--static-path-mount`` explicitly.
-
 Metrics
 =======
 
