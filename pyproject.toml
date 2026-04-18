@@ -292,6 +292,14 @@ ban-relative-imports = "all"
   "S104",
   "TC003",
   "DOC201",
+  "DOC402",   # "Yields" section not required in test fixture docstrings
+  "DOC501",   # tests don't document raised exceptions
+  "TRY003",   # long exception messages in assert paths are useful for CI
+  "EM101",    # exception message f-strings OK in tests
+  "EM102",    # exception message f-strings OK in tests
+  "SIM105",   # contextlib.suppress isn't always clearer in test teardown
+  "PLR6201",  # set-literal-for-membership noise in small tuples
+  "PLR0913",  # test fixtures/parametrize can grow arg lists
 ]
 
 
