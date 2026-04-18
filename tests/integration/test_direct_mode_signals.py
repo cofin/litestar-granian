@@ -125,8 +125,12 @@ app = Litestar(
 """
 
 
-SHUTDOWN_TIMEOUT_SECONDS = 5.0
-READY_POLL_TIMEOUT_SECONDS = 15.0
+# Generous CI headroom: local shutdowns run in ~100ms but CI runners
+# (especially macOS) have enough timing jitter that a 5s cap intermittently
+# tripped on a clean pass. 10s still comfortably enforces "Ctrl+C is not
+# stuck" while tolerating slow-burst runners.
+SHUTDOWN_TIMEOUT_SECONDS = 10.0
+READY_POLL_TIMEOUT_SECONDS = 20.0
 READY_POLL_INTERVAL_SECONDS = 0.2
 
 
