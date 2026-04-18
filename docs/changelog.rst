@@ -6,8 +6,8 @@ All commits to this project will be documented in this file.
 
 Litestar Granian Changelog
 
-Unreleased
-==========
+0.15.0
+======
 
 Breaking changes
 ----------------
@@ -24,6 +24,37 @@ Breaking changes
   ``--workers-kill-timeout``, ``--http2-keep-alive-timeout`` now accept
   human-readable durations in addition to integer seconds.
 - Minimum ``granian`` is bumped to ``>=2.7.0``.
+- Python 3.9 support is dropped; Python 3.14 and 3.14t (free-threaded) are
+  added to the test matrix.
+
+Migration notes
+---------------
+
+Defaults that did **not** change (for clarity):
+
+- ``--in-subprocess`` is still the default. Direct mode is available via
+  ``--no-subprocess`` (or ``LITESTAR_GRANIAN_IN_SUBPROCESS=false``) and is
+  now usable on all platforms, but the default has not been flipped.
+
+Silent behavioral shifts to watch for when upgrading from ``v0.14.2``:
+
+- **``_granian`` / ``granian.access`` loggers are no longer overwritten.**
+  Prior to this release the plugin unconditionally replaced any user
+  configuration for these two loggers with
+  ``{"handlers": ["console"], "level": "INFO", "propagate": False}``.
+  If your app's ``LoggingConfig`` (or structlog
+  ``standard_lib_logging_config``) defines them — for example routing
+  ``_granian`` through ``["queue_listener"]`` — your config is now
+  honored as written. Granian's log lines may flow through a different
+  handler than they did on ``v0.14.2``.
+- **``--runtime-mode`` default flip** may change worker threading for
+  apps that never set the flag. Pin ``--runtime-mode st`` to restore
+  the old behavior.
+- **Static mounts are now multi-mount.** Apps that relied on the
+  implicit ``/static`` route must now pass both ``--static-path-route``
+  and ``--static-path-mount`` (repeatable; paired positionally).
+- **``--static-path-expires=0``** now means *disable caching* rather
+  than failing the previous ``min=60`` validation.
 
 Direct mode and reload
 ----------------------
