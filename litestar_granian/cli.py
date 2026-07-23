@@ -3,7 +3,7 @@ import multiprocessing
 import os
 import platform
 import signal
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import tempfile
 from dataclasses import fields
@@ -52,7 +52,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from litestar import Litestar
-    from litestar.cli._utils import LitestarEnv  # pyright: ignore[reportPrivateImportUsage]
 
 
 class EnumType(GranianEnumType):

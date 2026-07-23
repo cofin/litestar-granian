@@ -10,8 +10,8 @@ __all__ = ("SampleController",)
 
 class SampleController(Controller):
     @get(path="/sample")
-    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
-        """Sample Route."""  # noqa: DOC201
+    async def sample_route(self) -> dict[str, str]:  # ruff: ignore[no-self-use]
+        """Sample Route."""  # ruff: ignore[docstring-missing-returns]
         return {"sample": "hello-world"}
 
 

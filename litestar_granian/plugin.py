@@ -48,7 +48,7 @@ class GranianPlugin(InitPluginProtocol, CLIPluginProtocol):
 
     __slots__ = ()
 
-    def on_cli_init(self, cli: "Group") -> None:  # noqa: PLR6301
+    def on_cli_init(self, cli: "Group") -> None:  # ruff: ignore[no-self-use]
         from litestar.cli.main import litestar_group as cli
 
         from litestar_granian.cli import run_command

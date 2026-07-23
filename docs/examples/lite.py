@@ -1,4 +1,4 @@
-# ruff: noqa: PLR6301
+# ruff: file-ignore[no-self-use]
 from __future__ import annotations
 
 from pathlib import Path

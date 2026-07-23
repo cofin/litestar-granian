@@ -9,7 +9,7 @@ __all__ = ("SampleController",)
 
 class SampleController(Controller):
     @get(path="/sample")
-    async def sample_route(self) -> dict[str, str]:  # noqa: PLR6301
+    async def sample_route(self) -> dict[str, str]:  # ruff: ignore[no-self-use]
         return {"sample": "hello-world"}
 
 

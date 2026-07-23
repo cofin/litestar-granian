@@ -9,10 +9,7 @@ import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
+from typing import TypedDict, cast
 
 REDIRECT_TEMPLATE = """
 <!DOCTYPE HTML>
@@ -41,9 +38,9 @@ class VersionSpec(TypedDict):
 
 @contextmanager
 def checkout(branch: str) -> Generator[None]:
-    subprocess.run(["git", "checkout", branch], check=True)  # noqa: S607
+    subprocess.run(["git", "checkout", branch], check=True)  # ruff: ignore[start-process-with-partial-path]
     yield
-    subprocess.run(["git", "checkout", "-"], check=True)  # noqa: S607
+    subprocess.run(["git", "checkout", "-"], check=True)  # ruff: ignore[start-process-with-partial-path]
 
 
 def load_version_spec() -> VersionSpec:
@@ -59,7 +56,7 @@ def build(output_dir: str, version: str | None) -> None:
     else:
         os.environ["_LITESTAR_GRANIAN_DOCS_BUILD_VERSION"] = version
 
-    subprocess.run(["make", "docs"], check=True)  # noqa: S607
+    subprocess.run(["make", "docs"], check=True)  # ruff: ignore[start-process-with-partial-path]
 
     Path(output_dir).mkdir()
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)
