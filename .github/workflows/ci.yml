@@ -23,7 +23,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Create virtual environment
-        run: uv sync --dev
+        run: uv sync --locked
 
       - name: Install Pre-Commit hooks
         run: uv run pre-commit install
@@ -50,7 +50,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
 
       - name: Run mypy
         run: uv run mypy
@@ -67,7 +67,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
 
       - name: Run pyright
         run: uv run pyright
@@ -84,13 +84,15 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
 
       - name: Run slotscheck
         run: uv run slotscheck litestar_granian
 
   test-linux:
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -107,13 +109,18 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
+
+      - name: Verify base install has no optional loop
+        run: uv run python tools/check_base_install.py
 
       - name: Test
         run: uv run pytest tests
 
   test-windows:
     runs-on: windows-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,12 +137,17 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
+
+      - name: Verify base install has no optional loop
+        run: uv run python tools/check_base_install.py
 
       - name: Test
         run: uv run pytest tests
   test-osx:
     runs-on: macos-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -152,10 +164,77 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
+
+      - name: Verify base install has no optional loop
+        run: uv run python tools/check_base_install.py
 
       - name: Test
         run: uv run pytest tests
+
+  test-event-loops-unix:
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python-version: "3.14t", loop: asyncio, sync-args: ""}
+          - {os: ubuntu-latest, python-version: "3.14t", loop: rloop, sync-args: "--extra rloop"}
+          - {os: ubuntu-latest, python-version: "3.14", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: ubuntu-latest, python-version: "3.14t", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: macos-latest, python-version: "3.14t", loop: asyncio, sync-args: ""}
+          - {os: macos-latest, python-version: "3.14t", loop: rloop, sync-args: "--extra rloop"}
+          - {os: macos-latest, python-version: "3.14", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: macos-latest, python-version: "3.14t", loop: uvloop, sync-args: "--extra uvloop"}
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install isolated loop dependencies
+        run: uv sync --locked ${{ matrix.sync-args }}
+
+      - name: Test explicit event loop
+        run: uv run pytest tests/integration/test_event_loops.py
+        env:
+          LITESTAR_GRANIAN_TEST_LOOP: ${{ matrix.loop }}
+
+  test-event-loops-windows:
+    runs-on: windows-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python-version: "3.14", loop: winloop, sync-args: "--extra winloop"}
+          - {python-version: "3.14t", loop: winloop, sync-args: "--extra winloop"}
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install isolated loop dependencies
+        run: uv sync --locked ${{ matrix.sync-args }}
+
+      - name: Test explicit event loop
+        run: uv run pytest tests/integration/test_event_loops.py
+        env:
+          LITESTAR_GRANIAN_TEST_LOOP: ${{ matrix.loop }}
 
   build-docs:
     needs:
@@ -173,7 +252,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --locked
 
       - name: Build docs
         run: uv run make docs

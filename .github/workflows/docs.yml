@@ -1,16 +1,25 @@
-name: Documentation Building
+name: Documentation
 
 on:
-  release:
-    types: [published]
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   docs:
-    permissions:
-      contents: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -22,21 +31,19 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --locked
 
-      - name: Fetch gh pages
-        run: git fetch origin gh-pages --depth=1 || echo "gh-pages branch does not exist yet, continuing..."
-        continue-on-error: true
+      - name: Build documentation
+        run: make docs
 
-      - name: Build release docs
-        run: uv run python tools/build_docs.py docs-build
-        if: github.event_name == 'release'
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
-      - name: Build dev docs
-        run: uv run python tools/build_docs.py docs-build
-        if: github.event_name == 'push'
-
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          folder: docs-build
+          path: docs/_build/html
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

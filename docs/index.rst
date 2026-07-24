@@ -1,56 +1,58 @@
+:layout: landing
+
 ================
 Litestar Granian
 ================
 
-Litestar Granian is a plugin to run a Litestar application with the Granian ASGI server.
+Run Litestar applications with Granian while preserving Litestar startup,
+shutdown, logging, and server integrations.
 
+.. container:: buttons
 
-Installation
-------------
+    :doc:`Run the quickstart <getting-started/quickstart>`
+    :doc:`Browse configuration <guides/configuration>`
 
-Installing ``litestar-granian`` is as easy as calling your favorite Python package manager:
+Choose your next task
+---------------------
 
-.. tab-set::
+.. grid:: 1 1 3 3
+    :gutter: 2
 
-    .. tab-item:: pip
-        :sync: key1
+    .. grid-item-card:: Start the server
+        :link: getting-started/quickstart
+        :link-type: doc
 
-        .. code-block:: bash
-            :caption: Using pip
+        Install the plugin, save one small app, and verify the JSON response.
 
-            python3 -m pip install litestar-granian
+    .. grid-item-card:: Prepare a deployment
+        :link: guides/deployment
+        :link-type: doc
 
-    .. tab-item:: pdm
-
-        .. code-block:: bash
-            :caption: Using `PDM <https://pdm.fming.dev/>`_
-
-            pdm add litestar-granian
-
-    .. tab-item:: Poetry
-
-        .. code-block:: bash
-            :caption: Using `Poetry <https://python-poetry.org/>`_
-
-            poetry add litestar-granian
-
-Usage
------
-
-.. todo:: Add usage instructions
+        Choose a service command and verify graceful process cleanup.
 
 .. toctree::
     :titlesonly:
-    :caption: Litestar Granian Documentation
+    :caption: Start here
     :hidden:
 
-    usage/index
+    getting-started/quickstart
+
+.. toctree::
+    :titlesonly:
+    :caption: Guides
+    :hidden:
+
+    guides/configuration
+    guides/logging-and-metrics
+    guides/static-files
+    guides/deployment
+
+.. toctree::
+    :titlesonly:
+    :caption: Reference
+    :hidden:
+
     reference/index
-
-.. toctree::
-    :titlesonly:
-    :caption: Development
-    :hidden:
-
+    migration/v0.16
     changelog
     contribution-guide

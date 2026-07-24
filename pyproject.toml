@@ -5,7 +5,7 @@
 [project]
 authors = [{ name = "Cody Fincher", email = "cody@litestar.dev" }]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Environment :: Web Environment",
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
@@ -22,31 +22,29 @@ classifiers = [
   "Intended Audience :: System Administrators",
 ]
 dependencies = [
-  "litestar>=2.15.0",
-  "granian[reload,pname]>=2.7.0",
-  "httptools",
-  "websockets",
+  "litestar>=2.19.0",
+  "granian[all]>=2.7.9",
 ]
-description = "Granian plugin for Litestar"
-keywords = ["litestar", "granian", "asgi"]
+description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
+keywords = ["litestar", "granian", "asgi", "asgi-server", "python", "web-server"]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "0.15.0"
+version = "0.16.0-beta.1"
 
 [project.urls]
-Changelog = "https://cofin.github.io/litesatr-granian/latest/changelog"
+Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.rst"
 Discord = "https://discord.gg/X3FJqy8d2j"
-Documentation = "https://cofin.github.io/litesatr-granian/latest/"
-Homepage = "https://cofin.github.io/litesatr-granian/latest/"
+Documentation = "https://github.com/cofin/litestar-granian/tree/main/docs"
 Issue = "https://github.com/cofin/litestar-granian/issues/"
 Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["rloop; sys_platform != \"win32\""]
-uvloop = ["uvloop; sys_platform != \"win32\" and platform_python_implementation == \"CPython\""]
+rloop = ["granian[rloop]>=2.7.9"]
+uvloop = ["granian[uvloop]>=2.7.9"]
+winloop = ["granian[winloop]>=2.7.9"]
 
 ######################
 # Build & Versioning #
@@ -57,7 +55,7 @@ requires = ["hatchling", "setuptools"]
 
 [tool.hatch.build.targets.sdist]
 dev-mode-dirs = ["."]
-exclude = ["/.github", "/docs"]
+exclude = ["/.agents", "/.beads", "/.geminiignore", "/.github", "/docs"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -65,6 +63,9 @@ allow-direct-references = true
 #####################
 # Environment Setup #
 #####################
+[tool.uv]
+default-groups = ["dev"]
+
 # Test environment with test-only dependencies
 [dependency-groups]
 dev = [
@@ -76,10 +77,7 @@ dev = [
   "sphinx-copybutton>=0.5.2",
   "sphinx-click>=5.0.1",
   "sphinx-design>=0.5.0",
-  "sphinxcontrib-mermaid>=0.9.2",
-  "auto-pytabs[sphinx]>=0.4.0",
-  "sphinx-jinja2-compat<0.4.0",
-  "litestar-sphinx-theme @ git+https://github.com/litestar-org/litestar-sphinx-theme.git",
+  "shibuya",
   # - Linting
   "mypy",
   "ruff",
@@ -97,7 +95,7 @@ dev = [
   "types-colorama",
   "types-pytz",
   # - Testing
-  "structlog",
+  "structlog>=26.1.0",
   "anyio",
   "coverage[toml]",
   "pytest",
@@ -107,6 +105,11 @@ dev = [
   "pytest-sugar",
   "pytest-click",
   "pytest-xdist",
+]
+benchmark = [
+  "httpx[http2]",
+  "psutil",
+  "websockets",
 ]
 
 #####################
@@ -121,7 +124,10 @@ filterwarnings = [
   "ignore::DeprecationWarning:litestar.handlers.http_handlers.decorators",
   "ignore::DeprecationWarning:multiprocessing.popen_fork",
 ]
+markers = ["upstream: issue-linked diagnostics that do not satisfy plugin-owned acceptance criteria"]
 testpaths = ["tests"]
+timeout = 120
+timeout_method = "thread"
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
@@ -152,6 +158,7 @@ concurrency = ["multiprocessing"]
 disable_warnings = ["no-data-collected", "module-not-measured", "module-not-imported"]
 omit = ["litestar_granian/__metadata__.py", "tests/*", "tools/*"]
 parallel = true
+source = ["litestar_granian"]
 
 
 #####################
@@ -186,78 +193,78 @@ include = ["litestar_granian/**/*.py", "litestar_granian/**/*.pyi", "tests/**/*.
 line-length = 120
 lint.fixable = ["ALL"]
 lint.ignore = [
-  "B027",   # Allow non-abstract empty methods in abstract base classes
-  "FBT003", # Allow boolean positional values in function calls, like `dict.get(... True)`
+  "empty-method-without-abstract-decorator",   # Allow non-abstract empty methods in abstract base classes
+  "boolean-positional-value-in-call", # Allow boolean positional values in function calls, like `dict.get(... True)`
   # Ignore checks for possible passwords
-  "S105",
-  "S106",
-  "S107",
+  "hardcoded-password-string",
+  "hardcoded-password-func-arg",
+  "hardcoded-password-default",
   # Ignore complexity
-  "C901",
-  "PLR0911",
-  "PLR0912",
-  "PLR0913",
-  "PLR0915",
-  "PLC1901", # empty string comparisons
-  "PLW2901", # `for` loop variable overwritten
-  "SIM114",  # Combine `if` branches using logical `or` operator
-  "E203",    # Whitespace before :, needed for black compatibility and also `ruff format`
-  "ISC001",  # causes unexpected behaviour with formatter
-  "E501",    # pycodestyle line too long, handled by black
-  "D100",    # pydocstyle - missing docstring in public module
-  "D101",    # pydocstyle - missing docstring in public class
-  "D102",    # pydocstyle - missing docstring in public method
-  "D103",    # pydocstyle - missing docstring in public function
-  "D104",    # pydocstyle - missing docstring in public package
-  "D105",    # pydocstyle - missing docstring in magic method
-  "D106",    # pydocstyle - missing docstring in public nested class
-  "D107",    # pydocstyle - missing docstring in __init__
-  "D202",    # pydocstyle - no blank lines allowed after function docstring
-  "D205",    # pydocstyle - 1 blank line required between summary line and description
-  "D415",    # pydocstyle - first line should end with a period, question mark, or exclamation point
-  "UP037",   # pyupgrade - removes quotes from type annotation
-  "A003",    # flake8-builtins - class attribute {name} is shadowing a python builtin
-  "B010",    # flake8-bugbear - do not call setattr with a constant attribute value
-  "B008",    #  flake8-bugbear - Do not perform function call `Parameter` in argument defaultsRuff(B008)
-  "RUF012",  # ruff - mutable class attributes should be annotated with `typing.ClassVar`
-  "ANN401",  # ruff - Dynamically typed expressions (typing.Any) are disallowed
-  "PLR0913", # ruff - Too many arguments to function call
-  "PLR2004", # Magic value used in comparison
-  "FBT001",  # Boolean typed positional argument in function definition
-  "FBT002",  # Boolean default positional argument in function definition
-  "FBT003",  # Boolean Boolean default positional argument in function definition
-  "ARG002",  # Unused method argument
-  "ARG001",  # Unused function argument
-  "TD002",
-  "TD003",
-  "FIX002",
-  "PGH003",
-  "RUF006",
-  "RUF029",  # Ruff - Function is declared `async`, but doesn't `await` or use `async` features. # ignore
-  "SLF001",
-  "PT007",
-  'S603',
-  "E501",    # pycodestyle line too long, handled by black
-  "PLW2901", # pylint - for loop variable overwritten by assignment target
-  "ANN401",
+  "complex-structure",
+  "too-many-return-statements",
+  "too-many-branches",
+  "too-many-arguments",
+  "too-many-statements",
+  "compare-to-empty-string", # empty string comparisons
+  "redefined-loop-name", # `for` loop variable overwritten
+  "if-with-same-arms",  # Combine `if` branches using logical `or` operator
+  "whitespace-before-punctuation",    # Whitespace before :, needed for black compatibility and also `ruff format`
+  "single-line-implicit-string-concatenation",  # causes unexpected behaviour with formatter
+  "line-too-long",    # pycodestyle line too long, handled by black
+  "undocumented-public-module",    # pydocstyle - missing docstring in public module
+  "undocumented-public-class",    # pydocstyle - missing docstring in public class
+  "undocumented-public-method",    # pydocstyle - missing docstring in public method
+  "undocumented-public-function",    # pydocstyle - missing docstring in public function
+  "undocumented-public-package",    # pydocstyle - missing docstring in public package
+  "undocumented-magic-method",    # pydocstyle - missing docstring in magic method
+  "undocumented-public-nested-class",    # pydocstyle - missing docstring in public nested class
+  "undocumented-public-init",    # pydocstyle - missing docstring in __init__
+  "blank-line-after-function",    # pydocstyle - no blank lines allowed after function docstring
+  "missing-blank-line-after-summary",    # pydocstyle - 1 blank line required between summary line and description
+  "missing-terminal-punctuation",    # pydocstyle - first line should end with a period, question mark, or exclamation point
+  "quoted-annotation",   # pyupgrade - removes quotes from type annotation
+  "builtin-attribute-shadowing",    # flake8-builtins - class attribute {name} is shadowing a python builtin
+  "set-attr-with-constant",    # flake8-bugbear - do not call setattr with a constant attribute value
+  "function-call-in-default-argument",    #  flake8-bugbear - Do not perform function call `Parameter` in argument defaultsRuff(B008)
+  "mutable-class-default",  # ruff - mutable class attributes should be annotated with `typing.ClassVar`
+  "any-type",  # ruff - Dynamically typed expressions (typing.Any) are disallowed
+  "too-many-arguments", # ruff - Too many arguments to function call
+  "magic-value-comparison", # Magic value used in comparison
+  "boolean-type-hint-positional-argument",  # Boolean typed positional argument in function definition
+  "boolean-default-value-positional-argument",  # Boolean default positional argument in function definition
+  "boolean-positional-value-in-call",  # Boolean Boolean default positional argument in function definition
+  "unused-method-argument",  # Unused method argument
+  "unused-function-argument",  # Unused function argument
+  "missing-todo-author",
+  "missing-todo-link",
+  "line-contains-todo",
+  "blanket-type-ignore",
+  "asyncio-dangling-task",
+  "unused-async",  # Ruff - Function is declared `async`, but doesn't `await` or use `async` features. # ignore
+  "private-member-access",
+  "pytest-parametrize-values-wrong-type",
+  'subprocess-without-shell-equals-true',
+  "line-too-long",    # pycodestyle line too long, handled by black
+  "redefined-loop-name", # pylint - for loop variable overwritten by assignment target
+  "any-type",
   "FBT",
-  "PLR0913", # too many arguments
-  "PLC0415", # imports should be at the top-level of a file
+  "too-many-arguments", # too many arguments
+  "import-outside-top-level", # imports should be at the top-level of a file
   "PT",
   "TD",
-  "PERF203", # ignore for now; investigate
-  "COM812",
-  "PLR0917",
-  "CPY001",  # copywrite check
-  "FA100", # future annotations check
-  "PLC2701",
+  "try-except-in-loop", # ignore for now; investigate
+  "missing-trailing-comma",
+  "too-many-positional-arguments",
+  "missing-copyright-notice",  # copywrite check
+  "future-rewritable-type-annotation", # future annotations check
+  "import-private-name",
 ]
 lint.select = ["ALL"]
 # Allow unused variables when underscore-prefixed.
 lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 preview = true                                                    # preview features & checks, use with caution
 src = ["litestar_granian","tools","example", "tests/", "docs/"]
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -270,36 +277,36 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 # Allow print/pprint
-"__init__.py" = ['F401', 'D104']
-"__main__.py" = ["E402"]
-"docs/*" = ["S404", "INP001","PLW0127","A001","ERA001","F811"]
-"tools/*" = ["S404"]
-"examples/*" = ["T201","DOC201"]
+"__init__.py" = ['unused-import', 'undocumented-public-package']
+"__main__.py" = ["module-import-not-at-top-of-file"]
+"docs/*" = ["suspicious-subprocess-import", "implicit-namespace-package","self-assigning-variable","builtin-variable-shadowing","commented-out-code","redefined-while-unused"]
+"tools/*" = ["suspicious-subprocess-import"]
+"examples/*" = ["print","docstring-missing-returns"]
 # Tests can use magic values, assertions, and relative imports
 "tests/**/*" = [
-  "PLR2004",
-  "S101",
-  "TID252",
-  "ERA001",
-  "ANN201",
-  "ANN001",
-  "D103",
-  "D104",
-  "T201",
-  "S404",
-  "PLR6301",
-  "FA102",
-  "S104",
-  "TC003",
-  "DOC201",
-  "DOC402",   # "Yields" section not required in test fixture docstrings
-  "DOC501",   # tests don't document raised exceptions
-  "TRY003",   # long exception messages in assert paths are useful for CI
-  "EM101",    # exception message f-strings OK in tests
-  "EM102",    # exception message f-strings OK in tests
-  "SIM105",   # contextlib.suppress isn't always clearer in test teardown
-  "PLR6201",  # set-literal-for-membership noise in small tuples
-  "PLR0913",  # test fixtures/parametrize can grow arg lists
+  "magic-value-comparison",
+  "assert",
+  "relative-imports",
+  "commented-out-code",
+  "missing-return-type-undocumented-public-function",
+  "missing-type-function-argument",
+  "undocumented-public-function",
+  "undocumented-public-package",
+  "print",
+  "suspicious-subprocess-import",
+  "no-self-use",
+  "future-required-type-annotation",
+  "hardcoded-bind-all-interfaces",
+  "typing-only-standard-library-import",
+  "docstring-missing-returns",
+  "docstring-missing-yields",   # "Yields" section not required in test fixture docstrings
+  "docstring-missing-exception",   # tests don't document raised exceptions
+  "raise-vanilla-args",   # long exception messages in assert paths are useful for CI
+  "raw-string-in-exception",    # exception message f-strings OK in tests
+  "f-string-in-exception",    # exception message f-strings OK in tests
+  "suppressible-exception",   # contextlib.suppress isn't always clearer in test teardown
+  "literal-membership",  # set-literal-for-membership noise in small tuples
+  "too-many-arguments",  # test fixtures/parametrize can grow arg lists
 ]
 
 
@@ -334,7 +341,7 @@ module = "tests.*"
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "0.15.0"
+current_version = "0.16.0-beta.1"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -359,11 +366,8 @@ values = ["alpha", "beta", "rc", "stable"]
 [tool.bumpversion.parts.pre_n]
 first_value = "1"
 
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-replace = 'version = "{new_version}"'
-search = 'version = "{current_version}"'
-
+# bump-my-version updates its TOML config file automatically. Registering
+# pyproject.toml again would apply prerelease suffixes twice.
 [[tool.bumpversion.files]]
 filename = "uv.lock"
 replace = """
@@ -376,5 +380,5 @@ version = "{current_version}"
 """
 
 [tool.codespell]
-ignore-words-list = ["granian"]
+ignore-words-list = ["fo", "granian"]
 skip = 'uv.lock'

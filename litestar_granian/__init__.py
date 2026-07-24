@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Public package exports for the Litestar Granian integration."""
 
 from litestar_granian.__metadata__ import __project__, __version__
 from litestar_granian.plugin import GranianPlugin

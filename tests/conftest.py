@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
-import operator
-import os
-import subprocess
 import sys
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, Callable, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import pytest
 from click.testing import CliRunner
@@ -17,11 +14,7 @@ from litestar.cli._utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-    from unittest.mock import MagicMock
-
     from _pytest.fixtures import FixtureRequest  # pyright: ignore[reportPrivateImportUsage]
-    from pytest_mock import MockerFixture
 
 pytestmark = pytest.mark.anyio
 here = Path(__file__).parent
@@ -63,22 +56,6 @@ def anyio_backend() -> str:
 @pytest.fixture(autouse=True)
 def reset_litestar_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LITESTAR_APP", raising=False)
-
-
-@pytest.fixture
-def patch_autodiscovery_paths(request: FixtureRequest) -> Callable[[list[str]], None]:
-    def patcher(paths: list[str]) -> None:
-        from litestar.cli._utils import AUTODISCOVERY_FILE_NAMES  # pyright: ignore[reportPrivateImportUsage]
-
-        old_paths = AUTODISCOVERY_FILE_NAMES[::]
-        AUTODISCOVERY_FILE_NAMES[:] = paths
-
-        def finalizer() -> None:
-            AUTODISCOVERY_FILE_NAMES[:] = old_paths
-
-        request.addfinalizer(finalizer)
-
-    return patcher
 
 
 class CreateAppFileFixture(Protocol):
@@ -156,90 +133,3 @@ def app_file(create_app_file: CreateAppFileFixture) -> Path:
 @pytest.fixture
 def runner() -> CliRunner:
     return CliRunner()
-
-
-class RunLitestarSubprocess(Protocol):
-    def __call__(
-        self,
-        app_module: str,
-        extra_args: list[str],
-        port: int,
-        *,
-        timeout: float = 30.0,
-    ) -> tuple[int, str]: ...
-
-
-@pytest.fixture
-def run_litestar_subprocess(tmp_project_dir: Path) -> RunLitestarSubprocess:
-    def _run(
-        app_module: str,
-        extra_args: list[str],
-        port: int,
-        *,
-        timeout: float = 30.0,
-    ) -> tuple[int, str]:
-        cmd = [
-            sys.executable,
-            "-m",
-            "litestar",
-            "--app",
-            f"{app_module}:app",
-            "run",
-            "--port",
-            str(port),
-            *extra_args,
-        ]
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(tmp_project_dir), env.get("PYTHONPATH", "")]))
-        env["PYTHONUNBUFFERED"] = "1"
-        try:
-            completed = subprocess.run(
-                cmd,
-                cwd=str(tmp_project_dir),
-                timeout=timeout,
-                capture_output=True,
-                text=True,
-                env=env,
-                check=False,
-            )
-            return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-            return -1, stdout + stderr
-
-    return _run
-
-
-@pytest.fixture
-def mock_granian_worker(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("granian._granian.ASGIWorker")
-
-
-@pytest.fixture()
-def mock_subprocess_run(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("subprocess.run")
-
-
-@pytest.fixture
-def mock_confirm_ask(mocker: MockerFixture) -> Generator[MagicMock, None, None]:
-    yield mocker.patch("rich.prompt.Confirm.ask", return_value=True)
-
-
-@pytest.fixture(
-    params=[
-        pytest.param((APP_DEFAULT_CONFIG_FILE_CONTENT, "app"), id="app_obj"),
-    ],
-)
-def _app_file_content(request: FixtureRequest) -> tuple[str, str]:  # pyright: ignore[reportUnusedFunction]
-    return cast("tuple[str, str]", request.param)
-
-
-@pytest.fixture
-def app_file_content(app_file_content_: tuple[str, str]) -> str:
-    return cast("str", operator.itemgetter(0)(app_file_content_))
-
-
-@pytest.fixture
-def app_file_app_name(app_file_content_: tuple[str, str]) -> str:
-    return cast("str", operator.itemgetter(1)(app_file_content_))

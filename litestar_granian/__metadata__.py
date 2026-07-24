@@ -1,4 +1,4 @@
-"""Metadata for the Project."""
+"""Resolve installed package name and version metadata."""
 
 from importlib.metadata import PackageNotFoundError, metadata, version  # pragma: no cover
 

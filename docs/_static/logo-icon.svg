@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Litestar Granian">
+  <g fill="none" stroke="#edb641" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="137" cy="128" r="76" stroke-width="14"/>
+    <path d="M29 175c47 12 100-2 151-49" stroke-width="15"/>
+  </g>
+  <path fill="#edb641" d="m181 72 10 28 30 1-24 18 8 29-24-17-25 17 9-29-24-18 30-1z"/>
+  <path fill="#edb641" d="m63 101 5 14h15l-12 9 5 14-13-8-12 8 5-14-12-9h15z"/>
+</svg>
