@@ -19,7 +19,7 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def wait_for_port(port: int, process: subprocess.Popen[str], *, open_: bool) -> None:
+def wait_for_port(port: int, process: subprocess.Popen[str] | None = None, *, open_: bool) -> None:
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         with socket.socket() as sock:
@@ -27,12 +27,16 @@ def wait_for_port(port: int, process: subprocess.Popen[str], *, open_: bool) -> 
             is_open = sock.connect_ex(("127.0.0.1", port)) == 0
         if is_open is open_:
             return
-        if open_ and process.poll() is not None:
+        if open_ and process is not None and process.poll() is not None:
             stdout, _ = process.communicate()
             message = f"server exited before readiness ({process.returncode}):\n{stdout}"
             raise AssertionError(message)
         time.sleep(0.05)
     message = f"port {port} did not become {'open' if open_ else 'closed'}"
+    if process is not None:
+        returncode = process.poll()
+        liveness = "still running" if returncode is None else f"already exited with code {returncode}"
+        message += f" (pid {process.pid} {liveness})"
     raise AssertionError(message)
 
 
@@ -97,13 +101,18 @@ def pid_exists(pid: int) -> bool:
     return True
 
 
-def wait_for_descendants_to_exit(pids: set[int]) -> None:
+def wait_for_descendants_to_exit(pids: set[int], *, parent_pid: int | None = None) -> None:
+    def current_pids() -> set[int]:
+        if parent_pid is not None and pid_exists(parent_pid):
+            return descendants(parent_pid)
+        return pids
+
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
-        if all(not pid_exists(pid) for pid in pids):
+        if all(not pid_exists(pid) for pid in current_pids()):
             return
         time.sleep(0.05)
-    remaining = sorted(pid for pid in pids if pid_exists(pid))
+    remaining = sorted(pid for pid in current_pids() if pid_exists(pid))
     message = f"Granian descendants did not exit: {remaining}"
     raise AssertionError(message)
 
@@ -138,6 +147,11 @@ def start_process(command: Sequence[str], *, cwd: Path, env: Mapping[str, str]) 
         text=True,
         start_new_session=True,
     )
+
+
+def finish_process(process: subprocess.Popen[str], timeout: float) -> str:
+    stdout, _ = process.communicate(timeout=timeout)
+    return stdout if stdout is not None else ""
 
 
 def terminate_process_group(process: subprocess.Popen[str]) -> None:

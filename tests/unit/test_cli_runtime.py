@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import signal
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -47,7 +49,7 @@ def test_supervised_runtime_keeps_handlers_and_app_env_through_lifespan_exit(
     monkeypatch.setattr(cli, "_server_lifespan", lifespan)
     monkeypatch.setenv("LITESTAR_APP", "previous:app")
     monkeypatch.setenv("LITESTAR_PORT", "8123")
-    built = SimpleNamespace(argv=["granian"], cleanup=MagicMock(), environment={}, pass_fds=())
+    built: Any = SimpleNamespace(argv=["granian"], cleanup=MagicMock(), environment={}, pass_fds=())
     env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
 
     exit_code = cli._run_supervised(env, built, workers_kill_timeout=5, port=9000)
@@ -63,6 +65,34 @@ def test_supervised_runtime_keeps_handlers_and_app_env_through_lifespan_exit(
     built.cleanup.assert_called_once()
 
 
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="POSIX only")
+def test_termination_signal_during_lifespan_teardown_after_child_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    teardown: list[str] = []
+    process = MagicMock(pid=4242)
+    process.wait.return_value = 0
+    process.poll.return_value = 0
+
+    @contextmanager
+    def lifespan(_app: object) -> Iterator[None]:
+        try:
+            yield
+        finally:
+            handler = signal.getsignal(signal.SIGINT)
+            assert callable(handler)
+            handler(signal.SIGINT, None)
+            teardown.append("finished")
+
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
+    monkeypatch.setattr(os, "killpg", MagicMock(side_effect=ProcessLookupError))
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
+    monkeypatch.setattr(cli, "_server_lifespan", lifespan)
+    built: Any = SimpleNamespace(argv=["granian"], cleanup=MagicMock(), environment={}, pass_fds=())
+    env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
+
+    assert cli._run_supervised(env, built, workers_kill_timeout=5, port=9000) == 0
+    assert teardown == ["finished"]
+
+
 def test_supervised_runtime_restores_state_after_child_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     @contextmanager
     def lifespan(_app: object) -> Iterator[None]:
@@ -76,7 +106,7 @@ def test_supervised_runtime_restores_state_after_child_failure(monkeypatch: pyte
     monkeypatch.setattr(cli, "_server_lifespan", lifespan)
     monkeypatch.delenv("LITESTAR_APP", raising=False)
     monkeypatch.delenv("LITESTAR_PORT", raising=False)
-    built = SimpleNamespace(argv=["granian"], cleanup=MagicMock(), environment={}, pass_fds=())
+    built: Any = SimpleNamespace(argv=["granian"], cleanup=MagicMock(), environment={}, pass_fds=())
     env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
 
     with pytest.raises(RuntimeError, match="child failed"):

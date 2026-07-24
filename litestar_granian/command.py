@@ -145,7 +145,7 @@ def _build_granian_command(env: "LitestarEnv", options: Mapping[str, Any]) -> _G
     config_path = Path(raw_path)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as config_file:
-            json.dump(log_config, config_file)
+            json.dump(log_config, config_file, ensure_ascii=True)
     except Exception:
         config_path.unlink(missing_ok=True)
         raise

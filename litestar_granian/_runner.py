@@ -1,8 +1,10 @@
 """Run Granian with Litestar reload and inherited-socket compatibility."""
 
+import inspect
 import json
 import os
 import socket
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -58,15 +60,65 @@ def _load_patterns(name: str) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _configure_server() -> None:
-    import granian.cli
+def _granian_version() -> str:
+    try:
+        return version("granian")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _accepts_three_positional_arguments(candidate: Any) -> bool:
+    try:
+        signature = inspect.signature(candidate)
+        signature.bind(1, 2, 3)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _probe_granian_compatibility(granian_cli: Any) -> None:
+    """Verify the private Granian internals this module patches still exist.
+
+    Raises:
+        SystemExit: If the installed Granian release no longer exposes the entry
+            points, server hook, or socket constructor this module depends on.
+    """
+    problems: list[str] = []
+
+    if not callable(getattr(granian_cli, "entrypoint", None)):
+        problems.append("granian.cli.entrypoint is missing")
+
+    server_cls = getattr(granian_cli, "Server", None)
+    if not isinstance(server_cls, type):
+        problems.append("granian.cli.Server is missing")
+    elif not callable(getattr(server_cls, "_init_shared_socket", None)):
+        problems.append(f"{server_cls.__name__}._init_shared_socket is missing")
+
+    try:
+        from granian._granian import SocketHolder
+    except ImportError:
+        problems.append("granian._granian.SocketHolder is missing")
+    else:
+        if not _accepts_three_positional_arguments(SocketHolder):
+            problems.append("granian._granian.SocketHolder no longer accepts (fd, uds, backlog)")
+
+    if problems:
+        message = (
+            "litestar-granian's Granian compatibility shim does not match installed "
+            f"granian {_granian_version()}: {'; '.join(problems)}. "
+            "Pin granian==2.7.* or drop --fd/--reload-include/--reload-exclude."
+        )
+        raise SystemExit(message)
+
+
+def _configure_server(granian_cli: Any) -> None:
     from granian._granian import SocketHolder
 
     includes = _load_patterns("LITESTAR_GRANIAN_RELOAD_INCLUDES")
     excludes = _load_patterns("LITESTAR_GRANIAN_RELOAD_EXCLUDES")
     raw_fd = os.getenv("LITESTAR_GRANIAN_FILE_DESCRIPTOR")
     inherited_fd = int(raw_fd) if raw_fd is not None else None
-    original_server = granian.cli.Server  # type: ignore[attr-defined]
+    original_server = granian_cli.Server
     socket_holder_factory = cast("Callable[[int, bool, int], Any]", SocketHolder)
 
     class LitestarGranianServer(original_server):  # type: ignore[misc,valid-type]
@@ -92,13 +144,15 @@ def _configure_server() -> None:
             self._sso = socket.socket(fileno=self._sfd)
             self._sso.set_inheritable(True)
 
-    setattr(granian.cli, "Server", LitestarGranianServer)
+    setattr(granian_cli, "Server", LitestarGranianServer)
 
 
 def main() -> None:
     """Run Granian with Litestar CLI compatibility hooks enabled."""
-    _configure_server()
     import granian.cli
+
+    _probe_granian_compatibility(granian.cli)
+    _configure_server(granian.cli)
 
     entrypoint = cast("Callable[[], None]", granian.cli.entrypoint)
     entrypoint()

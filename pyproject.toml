@@ -126,6 +126,8 @@ filterwarnings = [
 ]
 markers = ["upstream: issue-linked diagnostics that do not satisfy plugin-owned acceptance criteria"]
 testpaths = ["tests"]
+timeout = 120
+timeout_method = "thread"
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration

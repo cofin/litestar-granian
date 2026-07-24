@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,6 +29,7 @@ def test_supervisor_starts_new_posix_session(monkeypatch: pytest.MonkeyPatch) ->
         ["python", "-m", "granian", "app:app"],
         start_new_session=True,
     )
+    process.wait.assert_called_once_with()
 
 
 def test_supervisor_passes_child_environment_and_file_descriptors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,10 +54,12 @@ def test_supervisor_passes_child_environment_and_file_descriptors(monkeypatch: p
 def test_pending_termination_signal_is_forwarded_after_child_attachment(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123, returncode=0)
     process.wait.return_value = 0
+    process.poll.return_value = None
     popen = MagicMock(return_value=process)
     killpg = MagicMock()
     monkeypatch.setattr(subprocess, "Popen", popen)
     monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
 
     supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
     supervisor.forward(signal.SIGTERM)
@@ -66,8 +70,10 @@ def test_pending_termination_signal_is_forwarded_after_child_attachment(monkeypa
 
 def test_repeated_termination_signal_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
+    process.poll.return_value = None
     killpg = MagicMock()
     monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
     supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
     supervisor._process = process
 
@@ -83,8 +89,11 @@ def test_repeated_termination_signal_kills_process_group(monkeypatch: pytest.Mon
 @pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="POSIX only")
 def test_sighup_is_forwarded_without_starting_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
+    process.poll.return_value = None
     killpg = MagicMock()
+    setitimer = MagicMock()
     monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(signal, "setitimer", setitimer)
     supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
     supervisor._process = process
 
@@ -92,17 +101,49 @@ def test_sighup_is_forwarded_without_starting_shutdown(monkeypatch: pytest.Monke
 
     killpg.assert_called_once_with(123, signal.SIGHUP)
     assert supervisor.deadline is None
+    setitimer.assert_not_called()
 
 
-def test_expired_deadline_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_first_termination_signal_arms_kill_deadline_timer(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
-    process.wait.side_effect = [subprocess.TimeoutExpired("granian", 0.1), -signal.SIGKILL]
-    popen = MagicMock(return_value=process)
+    process.wait.return_value = 0
+    process.poll.return_value = None
+    setitimer = MagicMock()
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
+    monkeypatch.setattr(os, "killpg", MagicMock())
+    monkeypatch.setattr(signal, "setitimer", setitimer)
+
+    supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
+    supervisor.forward(signal.SIGTERM)
+    supervisor.run()
+
+    assert [call.args for call in setitimer.call_args_list] == [
+        (signal.ITIMER_REAL, 10.0),
+        (signal.ITIMER_REAL, 0),
+    ]
+    assert supervisor.deadline is None
+
+
+def test_kill_deadline_alarm_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.poll.return_value = None
+    handlers: dict[int, Any] = {}
+
+    def record_handler(signum: int, handler: Any) -> Any:
+        previous = handlers.get(signum)
+        handlers[signum] = handler
+        return previous
+
+    def expire_deadline(*_args: Any, **_kwargs: Any) -> int:
+        handlers[signal.SIGALRM](signal.SIGALRM, None)
+        return -signal.SIGKILL
+
+    process.wait.side_effect = expire_deadline
     killpg = MagicMock()
-    monotonic = MagicMock(side_effect=[10.0, 21.0])
-    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
     monkeypatch.setattr(os, "killpg", killpg)
-    monkeypatch.setattr("litestar_granian.supervisor.time.monotonic", monotonic)
+    monkeypatch.setattr(signal, "signal", MagicMock(side_effect=record_handler))
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
 
     supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
     supervisor.forward(signal.SIGTERM)
@@ -115,9 +156,106 @@ def test_expired_deadline_kills_process_group(monkeypatch: pytest.MonkeyPatch) -
     ]
 
 
+def test_run_restores_previous_alarm_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.wait.return_value = 0
+    process.poll.return_value = None
+    previous = MagicMock()
+    signal_api = MagicMock(return_value=previous)
+    setitimer = MagicMock()
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
+    monkeypatch.setattr(signal, "signal", signal_api)
+    monkeypatch.setattr(signal, "setitimer", setitimer)
+
+    _GranianSupervisor(["granian", "app:app"], kill_timeout=5).run()
+
+    installed, restored = signal_api.call_args_list
+    assert installed.args[0] == signal.SIGALRM
+    assert callable(installed.args[1])
+    assert restored.args == (signal.SIGALRM, previous)
+    assert [call.args for call in setitimer.call_args_list] == [(signal.ITIMER_REAL, 0)]
+
+
+def test_run_restores_default_alarm_handler_when_previous_is_foreign(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.wait.return_value = 0
+    process.poll.return_value = None
+    signal_api = MagicMock(return_value=None)
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
+    monkeypatch.setattr(signal, "signal", signal_api)
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
+
+    _GranianSupervisor(["granian", "app:app"], kill_timeout=5).run()
+
+    assert signal_api.call_args_list[-1].args == (signal.SIGALRM, signal.SIG_DFL)
+
+
+def test_forward_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.poll.return_value = 0
+    killpg = MagicMock()
+    setitimer = MagicMock()
+    monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(signal, "setitimer", setitimer)
+    supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
+    supervisor._process = process
+
+    supervisor.forward(signal.SIGINT)
+    supervisor.forward(signal.SIGINT)
+
+    killpg.assert_not_called()
+    setitimer.assert_not_called()
+
+
+def test_kill_group_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.poll.return_value = 0
+    killpg = MagicMock()
+    monkeypatch.setattr(os, "killpg", killpg)
+    supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
+    supervisor._process = process
+
+    supervisor._kill_group()
+
+    killpg.assert_not_called()
+
+
+def test_process_lookup_error_from_killpg_does_not_propagate(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.poll.return_value = None
+    killpg = MagicMock(side_effect=ProcessLookupError)
+    monkeypatch.setattr(os, "killpg", killpg)
+    monkeypatch.setattr(signal, "setitimer", MagicMock())
+    supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5)
+    supervisor._process = process
+
+    supervisor.forward(signal.SIGTERM)
+    supervisor._kill_group()
+
+    assert killpg.call_args_list == [
+        ((123, signal.SIGTERM),),
+        ((123, signal.SIGKILL),),
+    ]
+
+
+def test_failed_wait_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=123)
+    process.wait.side_effect = RuntimeError("wait failed")
+    process.poll.return_value = None
+    killpg = MagicMock()
+    monkeypatch.setattr(subprocess, "Popen", MagicMock(return_value=process))
+    monkeypatch.setattr(os, "killpg", killpg)
+
+    with pytest.raises(RuntimeError, match="wait failed"):
+        _GranianSupervisor(["granian", "app:app"], kill_timeout=5).run()
+
+    killpg.assert_called_once_with(123, signal.SIGKILL)
+
+
 def test_windows_uses_process_group_and_list_taskkill(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=456)
     process.wait.return_value = 1
+    process.poll.return_value = None
     popen = MagicMock(return_value=process)
     taskkill = MagicMock()
     monkeypatch.setattr(subprocess, "Popen", popen)
@@ -145,6 +283,34 @@ def test_windows_uses_process_group_and_list_taskkill(monkeypatch: pytest.Monkey
     )
 
 
+def test_windows_expired_deadline_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = MagicMock(pid=456)
+    process.poll.return_value = None
+    process.wait.side_effect = [subprocess.TimeoutExpired("granian", 0.1), -signal.SIGKILL]
+    popen = MagicMock(return_value=process)
+    taskkill = MagicMock()
+    monotonic = MagicMock(side_effect=[10.0, 21.0])
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(subprocess, "run", taskkill)
+    monkeypatch.setattr("litestar_granian.supervisor.time.monotonic", monotonic)
+    monkeypatch.setattr(
+        "litestar_granian.supervisor.shutil.which",
+        MagicMock(return_value=r"C:\Windows\System32\taskkill.exe"),
+    )
+
+    supervisor = _GranianSupervisor(["granian", "app:app"], kill_timeout=5, platform="win32")
+    supervisor.forward(signal.SIGTERM)
+    exit_code = supervisor.run()
+
+    assert exit_code == 128 + signal.SIGKILL
+    assert supervisor.deadline == pytest.approx(20.0)
+    process.send_signal.assert_called_once()
+    taskkill.assert_called_once_with(
+        [r"C:\Windows\System32\taskkill.exe", "/PID", "456", "/T", "/F"],
+        check=False,
+    )
+
+
 def test_signal_forwarder_restores_every_installed_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     supervisor = MagicMock()
     original = object()
@@ -163,6 +329,20 @@ def test_signal_forwarder_restores_every_installed_handler(monkeypatch: pytest.M
     forwarder.restore()
 
     signal_api.assert_not_called()
+
+
+def test_signal_forwarder_restores_handlers_that_python_did_not_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    signal_api = MagicMock(return_value=None)
+    monkeypatch.setattr(signal, "signal", signal_api)
+    forwarder = _SignalForwarder(MagicMock())
+
+    forwarder.install()
+    signal_api.reset_mock()
+    forwarder.restore()
+
+    assert [call.args for call in signal_api.call_args_list] == [
+        (signum, signal.SIG_DFL) for signum in forwarder.signals
+    ]
 
 
 @pytest.mark.parametrize(

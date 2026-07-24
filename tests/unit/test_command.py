@@ -241,30 +241,88 @@ def test_no_logging_config_keeps_granian_native_logging(monkeypatch: pytest.Monk
     assert built.temporary_files == ()
 
 
+def _validate(**overrides: Any) -> None:
+    options: dict[str, Any] = {
+        "fd": None,
+        "reload": False,
+        "workers_max_rss": None,
+        "ssl_client_verify": False,
+        "ssl_ca": None,
+        "ssl_certificate": None,
+        "ssl_keyfile": None,
+        "create_self_signed_cert": False,
+        "static_path_route": (),
+        "static_path_mount": (),
+    }
+    options.update(overrides)
+    _validate_cli_options(**options)
+
+
 def test_ssl_client_verification_requires_ca() -> None:
     with pytest.raises(UsageError, match="--ssl-ca"):
-        _validate_cli_options(
-            fd=None,
-            reload=False,
-            workers_max_rss=None,
-            ssl_client_verify=True,
-            ssl_ca=None,
-            static_path_route=(),
-            static_path_mount=(),
-        )
+        _validate(ssl_client_verify=True)
 
 
 def test_static_route_and_mount_counts_must_match(tmp_path: Path) -> None:
     with pytest.raises(UsageError, match="counts"):
-        _validate_cli_options(
-            fd=None,
-            reload=False,
-            workers_max_rss=None,
-            ssl_client_verify=False,
-            ssl_ca=None,
-            static_path_route=("/one", "/two"),
-            static_path_mount=(tmp_path,),
-        )
+        _validate(static_path_route=("/one", "/two"), static_path_mount=(tmp_path,))
+
+
+def test_certificate_authority_must_exist(tmp_path: Path) -> None:
+    missing = tmp_path / "ca.pem"
+
+    with pytest.raises(UsageError, match=f"File provided for --ssl-ca was not found: {missing.resolve()}"):
+        _validate(ssl_client_verify=True, ssl_ca=missing)
+
+
+@pytest.mark.parametrize(
+    ("provided", "missing_option"),
+    [("ssl_certificate", "--ssl-keyfile"), ("ssl_keyfile", "--ssl-certfile")],
+)
+def test_certificate_and_key_must_be_provided_together(
+    tmp_path: Path,
+    provided: str,
+    missing_option: str,
+) -> None:
+    path = tmp_path / "provided.pem"
+    path.write_text("value")
+
+    with pytest.raises(UsageError, match=f"No value provided for {missing_option}"):
+        _validate(**{provided: path})
+
+
+def test_certificate_and_key_must_exist_without_self_signed_generation(tmp_path: Path) -> None:
+    certificate = tmp_path / "cert.pem"
+    keyfile = tmp_path / "key.pem"
+    certificate.write_text("certificate")
+
+    with pytest.raises(UsageError, match=f"File provided for --ssl-keyfile was not found: {keyfile.resolve()}"):
+        _validate(ssl_certificate=certificate, ssl_keyfile=keyfile)
+
+
+def test_certificate_path_must_not_be_a_directory(tmp_path: Path) -> None:
+    keyfile = tmp_path / "key.pem"
+    keyfile.write_text("key")
+
+    with pytest.raises(UsageError, match=f"Path provided for --ssl-certfile is a directory: {tmp_path.resolve()}"):
+        _validate(ssl_certificate=tmp_path, ssl_keyfile=keyfile)
+
+
+def test_self_signed_generation_skips_existence_checks(tmp_path: Path) -> None:
+    _validate(
+        ssl_certificate=tmp_path / "cert.pem",
+        ssl_keyfile=tmp_path / "key.pem",
+        create_self_signed_cert=True,
+    )
+
+
+def test_existing_certificate_and_key_pass_validation(tmp_path: Path) -> None:
+    certificate = tmp_path / "cert.pem"
+    keyfile = tmp_path / "key.pem"
+    certificate.write_text("certificate")
+    keyfile.write_text("key")
+
+    _validate(ssl_certificate=certificate, ssl_keyfile=keyfile)
 
 
 def test_v016_help_preserves_litestar_and_deprecated_compatibility_options() -> None:
@@ -358,6 +416,10 @@ def test_http2_ranges_match_granian_279(name: str, minimum: int, maximum: int | 
             ["LITESTAR_SSL_CERT_PATH", "GRANIAN_SSL_CERTIFICATE"],
         ),
         ("ssl_keyfile", ["LITESTAR_SSL_KEY_PATH", "GRANIAN_SSL_KEYFILE"]),
+        (
+            "ssl_client_verify",
+            ["LITESTAR_SSL_CLIENT_VERIFY", "GRANIAN_SSL_CLIENT_VERIFY"],
+        ),
     ],
 )
 def test_litestar_environment_precedes_granian_environment(name: str, expected: list[str]) -> None:

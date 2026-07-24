@@ -12,6 +12,7 @@ import pytest
 
 from tests.integration._runtime import (
     descendants,
+    finish_process,
     free_port,
     start_process,
     terminate_process_group,
@@ -158,29 +159,28 @@ def test_parent_only_signal_reaps_granian_and_unwinds_lifespans(
                 process.send_signal(termination_signal)
             else:
                 os.kill(process.pid, termination_signal)
-        process.wait(timeout=12)
+        output = finish_process(process, timeout=12)
         wait_for_port(port, process, open_=False)
-        output = process.stdout.read() if process.stdout is not None else ""
 
         lines = marker.read_text(encoding="utf-8").splitlines()
         assert lines.count("sidecar-start") == 1
         assert lines.count("sidecar-stop") == 1
         graceful_workers = lines.count("app-stop")
+        degraded = False
         if repeat_signal:
             assert graceful_workers < workers
-        elif _FREE_THREADED:
-            # Granian #875: free-threaded workers can report a clean thread
-            # stop without running every ASGI shutdown hook.
-            assert 0 <= graceful_workers <= workers
-            if graceful_workers < workers:
+        elif graceful_workers != workers:
+            degraded = True
+            if _FREE_THREADED:
                 assert "free-threaded Python support is experimental!" in output
                 assert all(f"Stopped worker-{worker}" in output for worker in range(1, workers + 1))
-        else:
-            # Granian #875: each worker that misses its ASGI shutdown hook
-            # must be explicitly accounted for by Granian's forced-kill path.
-            assert 0 <= graceful_workers <= workers
-            if graceful_workers < workers:
+            else:
                 assert output.count("Killing worker-") >= workers - graceful_workers
-        wait_for_descendants_to_exit(descendant_pids)
+        wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
+        if degraded:
+            pytest.xfail(
+                f"Granian #875: only {graceful_workers}/{workers} workers ran their ASGI "
+                "shutdown hook before Granian's forced-kill path reaped them"
+            )
     finally:
         terminate_process_group(process)

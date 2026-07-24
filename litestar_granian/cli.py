@@ -27,7 +27,7 @@ from litestar.cli.commands.core import (
     _server_lifespan,  # pyright: ignore[reportPrivateUsage]
 )
 
-from litestar_granian.command import _build_granian_command
+from litestar_granian.command import _build_granian_command, _GranianCommand
 from litestar_granian.supervisor import _GranianSupervisor, _SignalForwarder
 
 try:
@@ -366,6 +366,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
     "--ssl-client-verify/--no-ssl-client-verify",
     default=False,
     help="Verify clients SSL certificates",
+    envvar="LITESTAR_SSL_CLIENT_VERIFY",
 )
 @option("--url-path-prefix", help="URL path prefix the app is mounted on")
 @option(
@@ -610,6 +611,9 @@ def run_command(
         workers_max_rss=workers_max_rss,
         ssl_client_verify=ssl_client_verify,
         ssl_ca=ssl_ca,
+        ssl_certificate=ssl_certificate,
+        ssl_keyfile=ssl_keyfile,
+        create_self_signed_cert=create_self_signed_cert,
         static_path_route=static_path_route,
         static_path_mount=static_path_mount,
     )
@@ -632,22 +636,25 @@ def run_command(
     _warn_if_only_granian_metrics(env.app, metrics_enabled=metrics_enabled)
 
     if create_self_signed_cert:
-        cert, key = create_ssl_files(str(ssl_certificate), str(ssl_keyfile), host)
-        if ssl_certificate is None and cert is not None:
-            ssl_certificate = Path(cert)
-        if ssl_keyfile is None and key is not None:
-            ssl_keyfile = Path(key)
+        certificate_path, keyfile_path = create_ssl_files(
+            str(ssl_certificate) if ssl_certificate is not None else None,
+            str(ssl_keyfile) if ssl_keyfile is not None else None,
+            host,
+        )
+        ssl_certificate = Path(certificate_path)
+        ssl_keyfile = Path(keyfile_path)
 
-    if not (os.getenv("LITESTAR_QUIET_CONSOLE") or False) and isatty():
+    quiet_console = bool(os.getenv("LITESTAR_QUIET_CONSOLE"))
+    if not quiet_console and isatty():
         console.rule("Starting [blue]Granian[/] supervisor", align="left")
         show_app_info(env.app)
 
-    options = locals().copy()
-    options.pop("app")
-    options.pop("ctx")
-    options.pop("env")
-    options.pop("in_subprocess")
-    options.pop("use_litestar_logger")
+    options = dict(ctx.params)
+    options.pop("in_subprocess", None)
+    options.pop("use_litestar_logger", None)
+    options["reload"] = reload
+    options["ssl_certificate"] = ssl_certificate
+    options["ssl_keyfile"] = ssl_keyfile
     built_command = _build_granian_command(env, options)
     exit_code = _run_supervised(
         env,
@@ -656,14 +663,15 @@ def run_command(
         port=port,
     )
 
-    console.print("[yellow]Granian workers stopped.[/]")
+    if not quiet_console:
+        console.print("[yellow]Granian workers stopped.[/]")
     if exit_code:
         raise Exit(exit_code)
 
 
 def _run_supervised(
     env: LitestarEnv,
-    built_command: Any,
+    built_command: _GranianCommand,
     *,
     workers_kill_timeout: int,
     port: int,
@@ -702,6 +710,9 @@ def _validate_cli_options(
     workers_max_rss: int | None,
     ssl_client_verify: bool,
     ssl_ca: Path | None,
+    ssl_certificate: Path | None,
+    ssl_keyfile: Path | None,
+    create_self_signed_cert: bool,
     static_path_route: tuple[str, ...],
     static_path_mount: tuple[Path, ...],
 ) -> None:
@@ -715,11 +726,48 @@ def _validate_cli_options(
     if fd is not None and sys.platform == "win32":
         message = "--fd is not supported on Windows"
         raise UsageError(message)
+    _validate_tls_options(
+        ssl_client_verify=ssl_client_verify,
+        ssl_ca=ssl_ca,
+        ssl_certificate=ssl_certificate,
+        ssl_keyfile=ssl_keyfile,
+        create_self_signed_cert=create_self_signed_cert,
+    )
+    if len(static_path_route) != len(static_path_mount):
+        message = "--static-path-route and --static-path-mount counts must match"
+        raise UsageError(message)
+
+
+def _validate_tls_options(
+    *,
+    ssl_client_verify: bool,
+    ssl_ca: Path | None,
+    ssl_certificate: Path | None,
+    ssl_keyfile: Path | None,
+    create_self_signed_cert: bool,
+) -> None:
     if ssl_client_verify and ssl_ca is None:
         message = "--ssl-client-verify requires --ssl-ca"
         raise UsageError(message)
-    if len(static_path_route) != len(static_path_mount):
-        message = "--static-path-route and --static-path-mount counts must match"
+    if ssl_ca is not None:
+        _validate_tls_file("--ssl-ca", ssl_ca)
+    if ssl_certificate is None and ssl_keyfile is None:
+        return
+    for option_name, path in {"--ssl-certfile": ssl_certificate, "--ssl-keyfile": ssl_keyfile}.items():
+        if path is None:
+            message = f"No value provided for {option_name}"
+            raise UsageError(message)
+        if not create_self_signed_cert:
+            _validate_tls_file(option_name, path)
+
+
+def _validate_tls_file(option_name: str, path: Path) -> None:
+    resolved = path.resolve()
+    if resolved.is_dir():
+        message = f"Path provided for {option_name} is a directory: {resolved}"
+        raise UsageError(message)
+    if not resolved.exists():
+        message = f"File provided for {option_name} was not found: {resolved}"
         raise UsageError(message)
 
 

@@ -7,12 +7,14 @@ import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import time
 from collections.abc import Sequence
+from contextlib import suppress
 from pathlib import Path
 from types import FrameType
 from typing import Any
 
 _CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
 _POLL_INTERVAL = 0.1
+_KILL_GRACE_PERIOD = 5.0
 
 
 def _map_exit_code(returncode: int) -> int:
@@ -25,7 +27,12 @@ def _map_exit_code(returncode: int) -> int:
 
 
 class _GranianSupervisor:
-    """Supervise a fresh Granian process group from the Litestar CLI parent."""
+    """Supervise a fresh Granian process group from the Litestar CLI parent.
+
+    POSIX blocks in :meth:`subprocess.Popen.wait` and enforces the forced-kill
+    deadline with an ``ITIMER_REAL`` alarm. Windows has no interval timer, so it
+    polls the child and compares :attr:`deadline` instead.
+    """
 
     def __init__(
         self,
@@ -46,6 +53,8 @@ class _GranianSupervisor:
         self._pending_signals: list[int] = []
         self._termination_forwarded = False
         self._killed = False
+        self._alarm_installed = False
+        self._previous_alarm_handler: Any = None
 
     def run(self) -> int:
         """Start Granian and wait for it.
@@ -64,13 +73,26 @@ class _GranianSupervisor:
                 popen_kwargs["pass_fds"] = self.pass_fds
         process = subprocess.Popen(self.command, **popen_kwargs)
         self._process = process
+        self._install_deadline_handler()
         pending_signals, self._pending_signals = self._pending_signals, []
         for signum in pending_signals:
             self.forward(signum)
 
+        try:
+            return _map_exit_code(self._wait(process))
+        except BaseException:
+            if process.poll() is None:
+                self._kill_group()
+            raise
+        finally:
+            self._cancel_deadline()
+
+    def _wait(self, process: subprocess.Popen[Any]) -> int:
+        if self.platform != "win32":
+            return process.wait()
         while True:
             try:
-                return _map_exit_code(process.wait(timeout=_POLL_INTERVAL))
+                return process.wait(timeout=_POLL_INTERVAL)
             except subprocess.TimeoutExpired:
                 if self.deadline is not None and time.monotonic() >= self.deadline:
                     self._kill_group()
@@ -96,20 +118,45 @@ class _GranianSupervisor:
 
         self._termination_forwarded = True
         self._send_group_signal(signum)
-        self.deadline = time.monotonic() + self.kill_timeout + 5
+        self._arm_deadline()
+
+    def _install_deadline_handler(self) -> None:
+        if self.platform == "win32":
+            return
+        self._previous_alarm_handler = signal.signal(signal.SIGALRM, self._handle_deadline)
+        self._alarm_installed = True
+
+    def _arm_deadline(self) -> None:
+        if self.platform == "win32":
+            self.deadline = time.monotonic() + self.kill_timeout + _KILL_GRACE_PERIOD
+            return
+        if self._alarm_installed:
+            signal.setitimer(signal.ITIMER_REAL, self.kill_timeout + _KILL_GRACE_PERIOD)
+
+    def _cancel_deadline(self) -> None:
+        if not self._alarm_installed:
+            return
+        self._alarm_installed = False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        previous, self._previous_alarm_handler = self._previous_alarm_handler, None
+        signal.signal(signal.SIGALRM, signal.SIG_DFL if previous is None else previous)
+
+    def _handle_deadline(self, _signum: int, _frame: FrameType | None) -> None:
+        self._kill_group()
 
     def _send_group_signal(self, signum: int) -> None:
         process = self._process
-        if process is None:
+        if process is None or process.poll() is not None:
             return
         if self.platform == "win32":
             process.send_signal(getattr(signal, "CTRL_BREAK_EVENT", signal.SIGTERM))
         else:
-            os.killpg(process.pid, signum)
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signum)
 
     def _kill_group(self) -> None:
         process = self._process
-        if process is None or self._killed:
+        if process is None or self._killed or process.poll() is not None:
             return
         self._killed = True
         if self.platform == "win32":
@@ -121,7 +168,8 @@ class _GranianSupervisor:
                 check=False,
             )
         else:
-            os.killpg(process.pid, signal.SIGKILL)
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
 
 
 class _SignalForwarder:
@@ -142,11 +190,13 @@ class _SignalForwarder:
             self._original_handlers[signum] = signal.signal(signum, self._handle)
 
     def restore(self) -> None:
-        """Restore all handlers saved by :meth:`install`."""
-        for signum in self.signals:
-            original = self._original_handlers.get(signum)
-            if original is not None:
-                signal.signal(signum, original)
+        """Restore all handlers saved by :meth:`install`.
+
+        A handler that Python did not install is reported as ``None`` and cannot
+        be reinstalled, so the default disposition is restored instead.
+        """
+        for signum, original in self._original_handlers.items():
+            signal.signal(signum, signal.SIG_DFL if original is None else original)
         self._original_handlers.clear()
 
     def _handle(self, signum: int, _frame: FrameType | None) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
@@ -11,12 +12,15 @@ import pytest
 from litestar_granian import cli
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from click.testing import CliRunner
     from litestar.cli._utils import LitestarGroup  # pyright: ignore[reportPrivateImportUsage]
 
     from tests.conftest import CreateAppFileFixture
+
+
+def _argument_value(argv: list[str], prefix: str) -> Path:
+    (value,) = [argument.removeprefix(prefix) for argument in argv if argument.startswith(prefix)]
+    return Path(value)
 
 
 def test_root_cli_invokes_the_supervised_runtime(
@@ -408,6 +412,170 @@ def test_self_signed_certificate_paths_are_forwarded(
     argv = run_supervised.call_args.args[1].argv
     assert f"--ssl-certificate={cert.resolve()}" in argv
     assert f"--ssl-keyfile={key.resolve()}" in argv
+
+
+def test_self_signed_certificate_without_paths_matches_litestar_run(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_supervised = MagicMock(return_value=0)
+    monkeypatch.setattr(cli, "_run_supervised", run_supervised)
+
+    result = runner.invoke(
+        root_command,
+        ["--app", f"{app_file.stem}:app", "run", "--create-self-signed-cert"],
+    )
+
+    assert result.exit_code != 0
+    assert "No value provided for --ssl-certfile" in result.output
+    run_supervised.assert_not_called()
+    assert not (app_file.parent / "None").exists()
+
+
+def test_ssl_certificate_without_keyfile_is_rejected(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    certificate = tmp_path / "cert.pem"
+    certificate.write_text("certificate")
+    run_supervised = MagicMock(return_value=0)
+    monkeypatch.setattr(cli, "_run_supervised", run_supervised)
+
+    result = runner.invoke(
+        root_command,
+        ["--app", f"{app_file.stem}:app", "run", "--ssl-certfile", str(certificate)],
+        terminal_width=200,
+    )
+
+    assert result.exit_code == 2
+    assert "No value provided for --ssl-keyfile" in " ".join(result.output.split())
+    run_supervised.assert_not_called()
+
+
+def test_ssl_certificate_must_exist_without_self_signed_generation(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    certificate = tmp_path / "missing-cert.pem"
+    keyfile = tmp_path / "missing-key.pem"
+    run_supervised = MagicMock(return_value=0)
+    monkeypatch.setattr(cli, "_run_supervised", run_supervised)
+
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--ssl-certfile",
+            str(certificate),
+            "--ssl-keyfile",
+            str(keyfile),
+        ],
+        terminal_width=200,
+    )
+
+    assert result.exit_code == 2
+    normalized_output = " ".join(result.output.split())
+    assert "File provided for --ssl-certfile was not found" in normalized_output
+    assert str(certificate.resolve()) in normalized_output.replace(" ", "").replace("│", "")
+    run_supervised.assert_not_called()
+
+
+def test_litestar_ssl_client_verify_environment_wins_over_granian(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = tmp_path / "ca.pem"
+    authority.write_text("authority")
+    run_supervised = MagicMock(return_value=0)
+    monkeypatch.setattr(cli, "_run_supervised", run_supervised)
+
+    result = runner.invoke(
+        root_command,
+        ["--app", f"{app_file.stem}:app", "run", "--ssl-ca", str(authority)],
+        env={"LITESTAR_SSL_CLIENT_VERIFY": "true", "GRANIAN_SSL_CLIENT_VERIFY": "false"},
+    )
+
+    assert result.exit_code == 0, result.output
+    argv = run_supervised.call_args.args[1].argv
+    assert "--ssl-client-verify" in argv
+    assert "--no-ssl-client-verify" not in argv
+
+
+def test_build_options_match_the_declared_command_parameters(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    certificate = tmp_path / "cert.pem"
+    keyfile = tmp_path / "key.pem"
+    observed: dict[str, Any] = {}
+
+    def build_granian_command(env: Any, options: dict[str, Any]) -> Any:
+        observed.update(options)
+        return SimpleNamespace(argv=[], environment={}, pass_fds=(), cleanup=lambda: None)
+
+    monkeypatch.setattr(cli, "create_ssl_files", MagicMock(return_value=(str(certificate), str(keyfile))))
+    monkeypatch.setattr(cli, "_build_granian_command", build_granian_command)
+    monkeypatch.setattr(cli, "_run_supervised", MagicMock(return_value=0))
+
+    result = runner.invoke(
+        root_command,
+        [
+            "--app",
+            f"{app_file.stem}:app",
+            "run",
+            "--create-self-signed-cert",
+            "--reload-include",
+            "*.html",
+            "--no-subprocess",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    expected_keys = {parameter.name for parameter in cli.run_command.params} - {
+        "in_subprocess",
+        "use_litestar_logger",
+    }
+    assert set(observed) == expected_keys
+    assert observed["reload"] is True
+    assert observed["ssl_certificate"] == certificate
+    assert observed["ssl_keyfile"] == keyfile
+
+
+@pytest.mark.parametrize(("quiet_console", "is_printed"), [("1", False), ("", True)])
+def test_quiet_console_controls_the_workers_stopped_notice(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    quiet_console: str,
+    is_printed: bool,
+) -> None:
+    monkeypatch.setattr(cli, "_run_supervised", MagicMock(return_value=0))
+
+    result = runner.invoke(
+        root_command,
+        ["--app", f"{app_file.stem}:app", "run"],
+        env={"LITESTAR_QUIET_CONSOLE": quiet_console},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert ("Granian workers stopped" in result.output) is is_printed
 
 
 def test_ssl_certfile_compatibility_alias_is_forwarded(

@@ -17,6 +17,7 @@ from websockets.sync.client import connect
 
 from tests.integration._runtime import (
     descendants,
+    finish_process,
     free_port,
     start_process,
     terminate_process_group,
@@ -172,14 +173,13 @@ def test_explicit_loop_serves_http_websocket_and_reaps_descendants(
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             os.kill(process.pid, signal.SIGINT)
-        process.wait(timeout=12)
+        output = finish_process(process, timeout=12)
         wait_for_port(port, process, open_=False)
-        output = process.stdout.read() if process.stdout is not None else ""
 
         assert process.returncode == 0, output
         assert "ModuleNotFoundError" not in output
         assert "ImportError" not in output
         assert "unsupported loop" not in output.lower()
-        wait_for_descendants_to_exit(descendant_pids)
+        wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
     finally:
         terminate_process_group(process)

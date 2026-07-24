@@ -19,6 +19,7 @@ from websockets.sync.client import connect
 
 from tests.integration._runtime import (
     descendants,
+    finish_process,
     free_port,
     start_process,
     terminate_process_group,
@@ -240,10 +241,9 @@ def _stop_server(server: _RunningServer, *, timeout: float = 12) -> str:
         server.process.send_signal(signal.CTRL_BREAK_EVENT)
     else:
         os.kill(server.process.pid, signal.SIGINT)
-    server.process.wait(timeout=timeout)
+    output = finish_process(server.process, timeout)
     wait_for_port(server.port, server.process, open_=False)
-    output = server.process.stdout.read() if server.process.stdout is not None else ""
-    wait_for_descendants_to_exit(server.descendant_pids)
+    wait_for_descendants_to_exit(server.descendant_pids, parent_pid=server.process.pid)
     return output
 
 

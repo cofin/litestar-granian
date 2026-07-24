@@ -198,3 +198,59 @@ def test_legacy_fallback_reason_still_honored(tmp_path: Path, caplog: pytest.Log
     assert selection is None
     assert len(caplog.records) == 1
     assert "legacy owns assets" in caplog.text
+
+
+def test_native_placement_with_fallback_reason_still_falls_back(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "app.js").write_text("ok")
+
+    config = SimpleNamespace(
+        placement=_StaticPlacement.NATIVE,
+        mounts=(_mount(assets),),
+        fallback_reason="dual signal owns assets",
+    )
+
+    with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
+
+    assert selection is None
+    assert len(caplog.records) == 1
+    assert "dual signal owns assets" in caplog.text
+
+
+class _RaisingProvider:
+    def get_static_server_config(self) -> Any:
+        raise KeyError("boom")
+
+
+def test_provider_raising_unexpected_exception_degrades_to_fallback(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
+        selection = _resolve_static_mounts(_app(_RaisingProvider()), static_mode="auto")
+
+    assert selection is None
+    assert len(caplog.records) == 1
+    assert "boom" in caplog.text
+
+
+def test_fallback_reason_is_also_printed_to_console(capsys: pytest.CaptureFixture[str]) -> None:
+    config = _placement_config(_StaticPlacement.ASGI, reason="SSR owns assets")
+
+    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
+
+    assert selection is None
+    assert "SSR owns assets" in capsys.readouterr().out
+
+
+def test_fallback_console_output_respects_quiet_console_env_var(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("LITESTAR_QUIET_CONSOLE", "1")
+    config = _placement_config(_StaticPlacement.ASGI, reason="SSR owns assets")
+
+    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
+
+    assert selection is None
+    assert capsys.readouterr().out == ""

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
+from litestar.cli._utils import console  # pyright: ignore[reportPrivateImportUsage]
+
 StaticMode = Literal["off", "auto"]
 
 logger = logging.getLogger("litestar_granian.static")
@@ -55,7 +57,7 @@ def _resolve_static_mounts(
     try:
         provider_config = providers[0].get_static_server_config()
         return _validate_provider_config(provider_config)
-    except (AttributeError, OSError, TypeError, ValueError) as exc:
+    except Exception as exc:  # ruff: ignore[blind-except]
         return _fallback(str(exc))
 
 
@@ -67,10 +69,10 @@ def _validate_provider_config(provider_config: Any) -> _StaticMounts | None:
             return _fallback(str(reason) if reason else "static provider selected ASGI placement")
         if placement != "native":
             return _fallback(f"static provider returned unexpected placement: {placement!r}")
-    else:
-        fallback_reason = getattr(provider_config, "fallback_reason", None)
-        if fallback_reason:
-            return _fallback(str(fallback_reason))
+
+    fallback_reason = getattr(provider_config, "fallback_reason", None)
+    if fallback_reason:
+        return _fallback(str(fallback_reason))
 
     mounts = getattr(provider_config, "mounts", None)
     if not isinstance(mounts, Sequence) or isinstance(mounts, (str, bytes)) or not mounts:
@@ -97,7 +99,7 @@ def _validate_provider_config(provider_config: Any) -> _StaticMounts | None:
             message = "static directory must be a filesystem path"
             raise TypeError(message)
         directory_path = Path(directory).resolve()
-        if not directory_path.is_dir() or not any(directory_path.iterdir()):
+        if not directory_path.is_dir() or not _directory_has_entries(directory_path):
             message = f"static directory must exist and be non-empty: {directory_path}"
             raise ValueError(message)
         routes.append(route)
@@ -121,6 +123,14 @@ def _is_local_absolute_route(route: object) -> bool:
     return not parsed.scheme and not parsed.netloc and not parsed.query and not parsed.fragment
 
 
+def _directory_has_entries(directory: Path) -> bool:
+    with os.scandir(directory) as entries:
+        return next(entries, None) is not None
+
+
 def _fallback(reason: str) -> _StaticMounts | None:
+    message = f"Granian native static serving unavailable; using Litestar fallback: {reason}"
     logger.info("Granian native static serving unavailable; using Litestar fallback: %s", reason)
+    if not (os.getenv("LITESTAR_QUIET_CONSOLE") or False):
+        console.print(message, markup=False, soft_wrap=True)
     return None

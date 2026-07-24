@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.integration._runtime import free_port, start_process, terminate_process_group, wait_for_port
+from tests.integration._runtime import finish_process, free_port, start_process, terminate_process_group, wait_for_port
 
 if TYPE_CHECKING:
     from tests.conftest import CreateAppFileFixture
@@ -209,8 +209,7 @@ def test_supervised_child_matches_custom_litestar_formatter(
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             os.kill(process.pid, signal.SIGINT)
-        process.wait(timeout=12)
-        output = process.stdout.read() if process.stdout is not None else ""
+        output = finish_process(process, timeout=12)
 
         if structured:
             payloads = [
@@ -280,9 +279,8 @@ def test_file_reload_reuses_one_formatter_config_and_parent_lifespan(
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             os.kill(process.pid, signal.SIGINT)
-        process.wait(timeout=12)
+        output = finish_process(process, timeout=12)
         wait_for_port(port, process, open_=False)
-        output = process.stdout.read() if process.stdout is not None else ""
     finally:
         terminate_process_group(process)
 
