@@ -39,6 +39,13 @@ If an active formatter is selected but cannot be reconstructed, startup stops
 with an error that directs you to ``--log-config`` instead of silently changing
 output.
 
+Automatic matching reproduces the active **formatter**, not the active
+**handler**. A handler that owns its own presentation — for example
+``rich.logging.RichHandler`` — renders differently in the Granian child,
+because handlers stay process-local by design and only the formatter crosses
+the process boundary. Use ``--log-config`` to configure an equivalent handler
+directly in Granian's process when matching presentation matters.
+
 Optional formatting packages
 ----------------------------
 

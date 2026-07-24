@@ -24,12 +24,6 @@ Choose your next task
 
         Install the plugin, save one small app, and verify the JSON response.
 
-    .. grid-item-card:: Understand the runtime
-        :link: concepts/how-it-works
-        :link-type: doc
-
-        See which process owns startup, workers, signals, and shutdown.
-
     .. grid-item-card:: Prepare a deployment
         :link: guides/deployment
         :link-type: doc
@@ -42,13 +36,6 @@ Choose your next task
     :hidden:
 
     getting-started/quickstart
-
-.. toctree::
-    :titlesonly:
-    :caption: Learn
-    :hidden:
-
-    concepts/how-it-works
 
 .. toctree::
     :titlesonly:

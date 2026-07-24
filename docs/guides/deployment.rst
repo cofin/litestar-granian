@@ -24,6 +24,25 @@ Process-manager checklist
 - Treat a non-zero child exit as a service failure; the parent preserves the
   Granian status.
 
+Signals and exit status
+=======================
+
+1. The first ``SIGINT`` or ``SIGTERM`` is forwarded to Granian.
+2. The parent waits for ``--workers-kill-timeout`` plus five seconds.
+3. A second termination signal or an expired deadline kills the Granian
+   process group.
+4. Litestar unwinds its server lifespans before the parent exits.
+
+On POSIX, ``SIGHUP`` is forwarded to Granian, which treats it as a native
+worker-reload signal rather than a shutdown request. A terminal hangup
+therefore does not stop a supervised server; use ``SIGINT`` or ``SIGTERM``.
+On Windows, the parent requests graceful shutdown with ``CTRL_BREAK_EVENT``
+before it uses a process-tree kill.
+
+A normal Granian exit is returned unchanged. A POSIX signal exit is
+normalized to the shell convention ``128 + signal``; an unhandled ``SIGTERM``
+exit reports ``143``.
+
 Environment files and working directories
 =========================================
 
@@ -31,5 +50,4 @@ Environment files and working directories
 needed by Litestar server-lifespan integrations must already exist in the
 parent environment.
 
-For a complete option inventory, use :doc:`../reference/cli`. For the process
-boundary, read :doc:`../concepts/how-it-works`.
+For a complete option inventory, use :doc:`../reference/cli`.

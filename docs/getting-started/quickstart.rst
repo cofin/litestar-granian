@@ -54,9 +54,9 @@ should return to your shell.
 Where to go next
 ================
 
-- Read :doc:`../concepts/how-it-works` before choosing worker or shutdown
-  settings.
 - Use :doc:`../guides/configuration` for bindings, reload, protocols, TLS,
   workers, and optional loops.
+- Use :doc:`../guides/deployment` for signal handling, shutdown, and service
+  manager settings.
 - Use :doc:`../guides/logging-and-metrics` to choose Granian log presentation.
 - Keep :doc:`../reference/cli` open for the complete option list.

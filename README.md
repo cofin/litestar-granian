@@ -87,8 +87,6 @@ On supported platforms, use the matching `rloop` or `winloop` extra and pass
 
 - [Quickstart](docs/getting-started/quickstart.rst) — repeat the first run and
   learn what to check.
-- [How it works](docs/concepts/how-it-works.rst) — understand the parent,
-  Granian workers, lifespans, and signals.
 - [Configuration](docs/guides/configuration.rst) — choose bindings, workers,
   protocols, TLS, reload, and event loops.
 - [Logging and metrics](docs/guides/logging-and-metrics.rst) — see how Granian
