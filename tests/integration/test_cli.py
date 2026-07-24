@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -21,6 +22,15 @@ if TYPE_CHECKING:
 def _argument_value(argv: list[str], prefix: str) -> Path:
     (value,) = [argument.removeprefix(prefix) for argument in argv if argument.startswith(prefix)]
     return Path(value)
+
+
+_ANSI_ESCAPES = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_PANEL_CHARACTERS = re.compile(r"[│╭╮╰╯─]")
+
+
+def _plain_output(output: str) -> str:
+    text = _PANEL_CHARACTERS.sub(" ", _ANSI_ESCAPES.sub("", output))
+    return " ".join(text.split())
 
 
 def test_root_cli_invokes_the_supervised_runtime(
@@ -98,7 +108,7 @@ def test_metrics_warn_when_litestar_prometheus_is_not_configured(
     )
 
     assert result.exit_code == 0, result.output
-    normalized_output = " ".join(result.output.split())
+    normalized_output = _plain_output(result.output)
     assert "--metrics enables Granian server and worker metrics only" in normalized_output
     assert "application-level request metrics are not being exported" in normalized_output
     assert "--metrics" in run_supervised.call_args.args[1].argv
@@ -120,7 +130,7 @@ def test_metrics_warning_is_suppressed_for_litestar_prometheus(
     )
 
     assert result.exit_code == 0, result.output
-    assert "--metrics enables Granian server and worker metrics only" not in result.output
+    assert "--metrics enables Granian server and worker metrics only" not in _plain_output(result.output)
 
 
 @pytest.mark.parametrize(
@@ -153,7 +163,7 @@ def test_ssl_client_verification_requires_ca(
     )
 
     assert result.exit_code == 2
-    assert "--ssl-client-verify requires --ssl-ca" in result.output
+    assert "--ssl-client-verify requires --ssl-ca" in _plain_output(result.output)
 
 
 @pytest.mark.parametrize(
@@ -188,7 +198,7 @@ def test_free_threaded_usage_errors_precede_app_and_supervisor_startup(
     )
 
     assert result.exit_code == 2
-    assert f"{option_name} is not supported on free-threaded Python" in result.output
+    assert f"{option_name} is not supported on free-threaded Python" in _plain_output(result.output)
     build_command.assert_not_called()
     run_supervised.assert_not_called()
     server_lifespan.assert_not_called()
@@ -332,7 +342,7 @@ def test_removed_boolean_options_warn_and_are_ignored(
     )
 
     assert result.exit_code == 0, result.output
-    assert expected_warning in result.output
+    assert expected_warning in _plain_output(result.output)
     argv = run_supervised.call_args.args[1].argv
     assert all("subprocess" not in arg and "litestar-logger" not in arg for arg in argv)
 
@@ -429,7 +439,7 @@ def test_self_signed_certificate_without_paths_matches_litestar_run(
     )
 
     assert result.exit_code != 0
-    assert "No value provided for --ssl-certfile" in result.output
+    assert "No value provided for --ssl-certfile" in _plain_output(result.output)
     run_supervised.assert_not_called()
     assert not (app_file.parent / "None").exists()
 
@@ -453,7 +463,7 @@ def test_ssl_certificate_without_keyfile_is_rejected(
     )
 
     assert result.exit_code == 2
-    assert "No value provided for --ssl-keyfile" in " ".join(result.output.split())
+    assert "No value provided for --ssl-keyfile" in _plain_output(result.output)
     run_supervised.assert_not_called()
 
 
@@ -484,9 +494,9 @@ def test_ssl_certificate_must_exist_without_self_signed_generation(
     )
 
     assert result.exit_code == 2
-    normalized_output = " ".join(result.output.split())
+    normalized_output = _plain_output(result.output)
     assert "File provided for --ssl-certfile was not found" in normalized_output
-    assert str(certificate.resolve()) in normalized_output.replace(" ", "").replace("│", "")
+    assert str(certificate.resolve()) in normalized_output.replace(" ", "")
     run_supervised.assert_not_called()
 
 
@@ -532,6 +542,7 @@ def test_build_options_match_the_declared_command_parameters(
     monkeypatch.setattr(cli, "create_ssl_files", MagicMock(return_value=(str(certificate), str(keyfile))))
     monkeypatch.setattr(cli, "_build_granian_command", build_granian_command)
     monkeypatch.setattr(cli, "_run_supervised", MagicMock(return_value=0))
+    monkeypatch.setattr(cli, "_is_free_threaded_build", lambda: False)
 
     result = runner.invoke(
         root_command,
@@ -575,7 +586,7 @@ def test_quiet_console_controls_the_workers_stopped_notice(
     )
 
     assert result.exit_code == 0, result.output
-    assert ("Granian workers stopped" in result.output) is is_printed
+    assert ("Granian workers stopped" in _plain_output(result.output)) is is_printed
 
 
 def test_ssl_certfile_compatibility_alias_is_forwarded(

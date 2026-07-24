@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -15,7 +16,10 @@ from litestar_granian.supervisor import (
     _SignalForwarder,
 )
 
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="exercises the POSIX supervisor path")
 
+
+@posix_only
 def test_supervisor_starts_new_posix_session(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123, returncode=0)
     process.wait.return_value = 0
@@ -32,6 +36,7 @@ def test_supervisor_starts_new_posix_session(monkeypatch: pytest.MonkeyPatch) ->
     process.wait.assert_called_once_with()
 
 
+@posix_only
 def test_supervisor_passes_child_environment_and_file_descriptors(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123, returncode=0)
     process.wait.return_value = 0
@@ -51,6 +56,7 @@ def test_supervisor_passes_child_environment_and_file_descriptors(monkeypatch: p
     assert popen.call_args.kwargs["pass_fds"] == (7,)
 
 
+@posix_only
 def test_pending_termination_signal_is_forwarded_after_child_attachment(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123, returncode=0)
     process.wait.return_value = 0
@@ -68,6 +74,7 @@ def test_pending_termination_signal_is_forwarded_after_child_attachment(monkeypa
     killpg.assert_called_once_with(123, signal.SIGTERM)
 
 
+@posix_only
 def test_repeated_termination_signal_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.poll.return_value = None
@@ -104,6 +111,7 @@ def test_sighup_is_forwarded_without_starting_shutdown(monkeypatch: pytest.Monke
     setitimer.assert_not_called()
 
 
+@posix_only
 def test_first_termination_signal_arms_kill_deadline_timer(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.wait.return_value = 0
@@ -124,6 +132,7 @@ def test_first_termination_signal_arms_kill_deadline_timer(monkeypatch: pytest.M
     assert supervisor.deadline is None
 
 
+@posix_only
 def test_kill_deadline_alarm_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.poll.return_value = None
@@ -156,6 +165,7 @@ def test_kill_deadline_alarm_kills_process_group(monkeypatch: pytest.MonkeyPatch
     ]
 
 
+@posix_only
 def test_run_restores_previous_alarm_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.wait.return_value = 0
@@ -176,6 +186,7 @@ def test_run_restores_previous_alarm_handler(monkeypatch: pytest.MonkeyPatch) ->
     assert [call.args for call in setitimer.call_args_list] == [(signal.ITIMER_REAL, 0)]
 
 
+@posix_only
 def test_run_restores_default_alarm_handler_when_previous_is_foreign(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.wait.return_value = 0
@@ -190,6 +201,7 @@ def test_run_restores_default_alarm_handler_when_previous_is_foreign(monkeypatch
     assert signal_api.call_args_list[-1].args == (signal.SIGALRM, signal.SIG_DFL)
 
 
+@posix_only
 def test_forward_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.poll.return_value = 0
@@ -207,6 +219,7 @@ def test_forward_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: pyt
     setitimer.assert_not_called()
 
 
+@posix_only
 def test_kill_group_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.poll.return_value = 0
@@ -220,6 +233,7 @@ def test_kill_group_after_child_exit_leaves_the_reaped_group_alone(monkeypatch: 
     killpg.assert_not_called()
 
 
+@posix_only
 def test_process_lookup_error_from_killpg_does_not_propagate(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.poll.return_value = None
@@ -238,6 +252,7 @@ def test_process_lookup_error_from_killpg_does_not_propagate(monkeypatch: pytest
     ]
 
 
+@posix_only
 def test_failed_wait_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=123)
     process.wait.side_effect = RuntimeError("wait failed")

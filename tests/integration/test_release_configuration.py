@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 import pytest
-import tomllib
 from packaging.version import Version
+
+tomllib = pytest.importorskip("tomllib", reason="tomllib requires Python 3.11 or newer")
 
 ROOT = Path(__file__).parents[2]
 

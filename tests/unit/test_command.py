@@ -217,6 +217,7 @@ def test_explicit_log_config_wins_completely(tmp_path: Path) -> None:
     assert built.temporary_files == ()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes")
 def test_automatic_formatter_matching_generates_mode_600_config() -> None:
     built = _build_granian_command(_env(GranianPlugin(), LoggingConfig()), _options())
     try:

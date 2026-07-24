@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -66,6 +67,7 @@ def test_supervised_runtime_keeps_handlers_and_app_env_through_lifespan_exit(
 
 
 @pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="POSIX only")
+@pytest.mark.skipif(sys.platform == "win32", reason="exercises the POSIX supervisor path")
 def test_termination_signal_during_lifespan_teardown_after_child_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     teardown: list[str] = []
     process = MagicMock(pid=4242)
