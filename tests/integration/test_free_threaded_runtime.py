@@ -30,10 +30,16 @@ from tests.integration._runtime import (
 if TYPE_CHECKING:
     from tests.conftest import CreateAppFileFixture
 
-pytestmark = pytest.mark.skipif(
-    sysconfig.get_config_var("Py_GIL_DISABLED") != 1,
-    reason="free-threaded runtime stress requires a Py_GIL_DISABLED build",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        sysconfig.get_config_var("Py_GIL_DISABLED") != 1,
+        reason="free-threaded runtime stress requires a Py_GIL_DISABLED build",
+    ),
+    pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Granian forces a single worker on Windows; these tests exercise two shared workers",
+    ),
+]
 
 _APP = """
 from __future__ import annotations

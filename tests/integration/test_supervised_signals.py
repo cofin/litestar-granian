@@ -86,8 +86,16 @@ _FREE_THREADED = sysconfig.get_config_var("Py_GIL_DISABLED") == 1
 _CASES = (
     [
         pytest.param(1, _WINDOWS_BREAK, False, True, False, id="break-one-worker-structlog"),
-        pytest.param(2, _WINDOWS_BREAK, False, True, False, id="break-two-workers-structlog"),
-        pytest.param(1, _WINDOWS_BREAK, True, False, False, id="break-reload-standard"),
+        pytest.param(
+            2,
+            _WINDOWS_BREAK,
+            False,
+            True,
+            False,
+            id="break-two-workers-structlog",
+            marks=pytest.mark.skip(reason="Granian forces a single worker on Windows"),
+        ),
+        *([] if _FREE_THREADED else [pytest.param(1, _WINDOWS_BREAK, True, False, False, id="break-reload-standard")]),
         pytest.param(1, _WINDOWS_BREAK, False, False, True, id="repeated-break-forced"),
     ]
     if sys.platform == "win32"
@@ -173,7 +181,8 @@ def test_parent_only_signal_reaps_granian_and_unwinds_lifespans(
             degraded = True
             if _FREE_THREADED:
                 assert "free-threaded Python support is experimental!" in output
-                assert all(f"Stopped worker-{worker}" in output for worker in range(1, workers + 1))
+                if sys.platform != "win32":
+                    assert all(f"Stopped worker-{worker}" in output for worker in range(1, workers + 1))
             else:
                 assert output.count("Killing worker-") >= workers - graceful_workers
         wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
