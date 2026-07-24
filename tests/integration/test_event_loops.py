@@ -47,7 +47,7 @@ async def echo(socket: WebSocket) -> None:
     await socket.close()
 
 
-app = Litestar(route_handlers=[health, echo], plugins=[GranianPlugin(log_style="auto")])
+app = Litestar(route_handlers=[health, echo], plugins=[GranianPlugin()])
 """
 
 _LOOP = os.environ.get("LITESTAR_GRANIAN_TEST_LOOP", "asyncio")

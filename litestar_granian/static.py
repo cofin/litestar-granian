@@ -14,7 +14,7 @@ logger = logging.getLogger("litestar_granian.static")
 
 
 @dataclass(frozen=True)
-class _NativeStaticConfig:
+class _StaticMounts:
     routes: tuple[str, ...]
     mounts: tuple[Path, ...]
     directory_index: str | None
@@ -27,7 +27,7 @@ def _resolve_static_mounts(
     explicit_routes: tuple[str, ...] = (),
     explicit_mounts: tuple[Path, ...] = (),
     explicit_directory_index: str | None = None,
-) -> _NativeStaticConfig | None:
+) -> _StaticMounts | None:
     """Resolve explicit mounts or one structural static provider.
 
     Returns:
@@ -40,7 +40,7 @@ def _resolve_static_mounts(
         if len(explicit_routes) != len(explicit_mounts):
             message = "static route and mount counts must match"
             raise ValueError(message)
-        return _NativeStaticConfig(
+        return _StaticMounts(
             routes=explicit_routes,
             mounts=tuple(Path(path).resolve() for path in explicit_mounts),
             directory_index=explicit_directory_index,
@@ -59,7 +59,7 @@ def _resolve_static_mounts(
         return _fallback(str(exc))
 
 
-def _validate_provider_config(provider_config: Any) -> _NativeStaticConfig | None:
+def _validate_provider_config(provider_config: Any) -> _StaticMounts | None:
     placement = getattr(provider_config, "placement", None)
     if placement is not None:
         if placement == "asgi":
@@ -107,7 +107,7 @@ def _validate_provider_config(provider_config: Any) -> _NativeStaticConfig | Non
     if len(directory_indexes) != 1:
         message = "all native static mounts must use the same directory index"
         raise ValueError(message)
-    return _NativeStaticConfig(
+    return _StaticMounts(
         routes=tuple(routes),
         mounts=tuple(directories),
         directory_index=directory_indexes.pop(),
@@ -121,6 +121,6 @@ def _is_local_absolute_route(route: object) -> bool:
     return not parsed.scheme and not parsed.netloc and not parsed.query and not parsed.fragment
 
 
-def _fallback(reason: str) -> _NativeStaticConfig | None:
+def _fallback(reason: str) -> _StaticMounts | None:
     logger.info("Granian native static serving unavailable; using Litestar fallback: %s", reason)
     return None

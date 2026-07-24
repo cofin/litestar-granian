@@ -1,14 +1,15 @@
-"""Release-version configuration contract tests."""
+"""Release-version configuration tests."""
 
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import tomllib
 from packaging.version import Version
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 
 
 def test_bumpversion_supports_pep440_prereleases() -> None:
@@ -18,7 +19,6 @@ def test_bumpversion_supports_pep440_prereleases() -> None:
     bumpversion = config["tool"]["bumpversion"]
 
     assert bumpversion["current_version"] == project_version
-    assert Version(project_version)
     assert re.fullmatch(bumpversion["parse"], "0.16.0-beta.1")
     assert Version("0.16.0-beta.1").is_prerelease
     assert bumpversion["serialize"] == [
@@ -46,7 +46,7 @@ def test_current_prerelease_can_finalize_without_advancing_release_line() -> Non
     current_version = Version(config["project"]["version"])
 
     if not current_version.is_prerelease:
-        return
+        pytest.skip("current project version is already stable")
 
     bump_my_version = Path(sys.executable).with_name("bump-my-version")
     assert bump_my_version.is_file()

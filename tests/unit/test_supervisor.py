@@ -159,6 +159,10 @@ def test_signal_forwarder_restores_every_installed_handler(monkeypatch: pytest.M
     restored = signal_api.call_args_list[len(forwarder.signals) :]
     assert installed == list(forwarder.signals)
     assert [call.args for call in restored] == [(signum, original) for signum in forwarder.signals]
+    signal_api.reset_mock()
+    forwarder.restore()
+
+    signal_api.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -1,118 +1,67 @@
 # The module name is part of the generated dictConfig import path.
 # ruff: file-ignore[stdlib-module-shadowing]
-"""Build child-owned Granian logging configurations from Litestar settings."""
+"""Reconstruct Litestar's active formatter in Granian's logging config."""
 
 import base64
-import json
 import logging
 import logging.config
 import pickle  # ruff: ignore[suspicious-pickle-import]
+from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
-from datetime import datetime, timezone
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Protocol, cast
 
-from litestar.logging import LoggingConfig, StructLoggingConfig
-from litestar.logging.config import BaseLoggingConfig
-
-LogStyle = Literal["auto", "native", "standard", "json"]
-ResolvedLogStyle = Literal["native", "standard", "json"]
-
-_STANDARD_FORMAT = "%(levelname)s - %(asctime)s - %(name)s - %(module)s - %(message)s"
-_SAFE_FORMATTER_FIELDS = ("format", "datefmt", "style")
-_logger = logging.getLogger(__name__)
+from granian.log import LOGGING_CONFIG
 
 
-class _FormatterLike(Protocol):
+class _FormatterSetupError(RuntimeError):
+    """Raised when automatic formatter matching cannot cross the process boundary."""
+
+
+class _LogFormatter(Protocol):
     def format(self, record: logging.LogRecord) -> str: ...
 
 
-class JSONFormatter(logging.Formatter):
-    """Format Granian records as one process-safe JSON object per line."""
-
-    def format(self, record: logging.LogRecord) -> str:  # ruff: ignore[no-self-use]
-        payload = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
-            "level": record.levelname.lower(),
-            "logger": record.name,
-            "event": record.getMessage(),
-        }
-        return json.dumps(payload, ensure_ascii=False)
-
-
-def resolve_log_style(style: LogStyle, logging_config: object | None) -> ResolvedLogStyle:
-    """Resolve ``auto`` from Litestar's configured logging substrate.
-
-    Returns:
-        The concrete Granian log presentation.
-    """
-    if style != "auto":
-        return style
-    if isinstance(logging_config, StructLoggingConfig):
-        return "json"
-    if isinstance(logging_config, LoggingConfig):
-        return "standard"
-    return "native"
-
-
 def build_logging_config(
-    style: ResolvedLogStyle,
-    logging_config: BaseLoggingConfig | None = None,
+    logging_config: object | None,
+    *,
+    logger: logging.Logger | None = None,
 ) -> dict[str, Any] | None:
-    """Build a JSON-serializable Granian dictConfig using direct streams.
+    """Match Granian to Litestar's effective formatter without copying logging machinery.
+
+    Args:
+        logging_config: Litestar's logging configuration, used only as a
+            structural fallback when the active logger graph has no formatter.
+        logger: Logger graph entry point. Defaults to the active ``litestar``
+            standard-library logger.
 
     Returns:
-        A process-safe dictConfig, or ``None`` for Granian-native logging.
+        A deep copy of Granian's native config with reconstructed formatters,
+        or ``None`` when no compatible Litestar formatter exists.
     """
-    if style == "native":
+    selected = _formatter_from_logger(logger or logging.getLogger("litestar"))
+    if selected is None:
+        selected = _formatter_from_config(logging_config)
+    if selected is None:
         return None
 
-    if style == "json":
-        generic_formatter = _structlog_formatter(logging_config) or {"()": "litestar_granian.logging.JSONFormatter"}
-    else:
-        generic_formatter = _standard_formatter(logging_config)
-    access_formatter = dict(generic_formatter)
-    return {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "generic": generic_formatter,
-            "access": access_formatter,
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "generic",
-                "stream": "ext://sys.stdout",
-            },
-            "access": {
-                "class": "logging.StreamHandler",
-                "formatter": "access",
-                "stream": "ext://sys.stdout",
-            },
-        },
-        "loggers": {
-            "_granian": {
-                "handlers": ["console"],
-                "level": "INFO",
-                "propagate": False,
-            },
-            "granian.access": {
-                "handlers": ["access"],
-                "level": "INFO",
-                "propagate": False,
-            },
-        },
-    }
+    formatter_config = _serialized_formatter(selected)
+    config = cast("dict[str, Any]", deepcopy(LOGGING_CONFIG))
+    formatters = cast("dict[str, Any]", config["formatters"])
+    formatters["generic"] = dict(formatter_config)
+    formatters["access"] = dict(formatter_config)
+    return config
 
 
-def load_serialized_formatter(payload: str) -> _FormatterLike:
+def load_serialized_formatter(payload: str) -> _LogFormatter:
     """Create a fresh child-owned formatter-compatible object.
 
-    The payload is generated into a mode-600 temporary log configuration by
-    this package. Only the formatter is transferred; handlers, queues,
-    listeners, loggers, locks, and other live logging state remain isolated.
-    The reconstructed object may be a standard formatter, a custom formatter,
-    or another object that provides a callable ``format(record)`` method.
+    The mode-600 configuration is generated by this package from a formatter
+    already selected in the Litestar parent. No handlers, queues, listeners,
+    loggers, locks, levels, or other live logging state cross the boundary.
+
+    Args:
+        payload: Base64-encoded pickle generated by
+            :func:`build_logging_config`.
 
     Returns:
         A child-owned object with a callable ``format(record)`` method.
@@ -124,67 +73,137 @@ def load_serialized_formatter(payload: str) -> _FormatterLike:
     if not callable(getattr(formatter, "format", None)):
         message = "Serialized Litestar formatter does not provide format()"
         raise TypeError(message)
-    return cast("_FormatterLike", formatter)
+    return cast("_LogFormatter", formatter)
 
 
-def _standard_formatter(logging_config: BaseLoggingConfig | None) -> dict[str, str]:
-    fallback = {"format": _STANDARD_FORMAT, "style": "%"}
-    if not isinstance(logging_config, LoggingConfig):
-        return fallback
+def _formatter_from_logger(logger: logging.Logger) -> _LogFormatter | None:
+    current: logging.Logger | None = logger
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        formatter = _formatter_from_handlers(current.handlers)
+        if formatter is not None:
+            return formatter
+        if not current.propagate:
+            return None
+        current = current.parent
+    return None
 
-    formatter = _active_formatter(logging_config)
-    if not isinstance(formatter, dict):
-        return fallback
-    if "()" in formatter:
-        return _serialized_formatter(formatter) or fallback
-    selected = {key: value for key in _SAFE_FORMATTER_FIELDS if isinstance((value := formatter.get(key)), str)}
-    return selected or fallback
+
+def _formatter_from_handlers(handlers: Iterable[object], visited: set[int] | None = None) -> _LogFormatter | None:
+    seen = visited if visited is not None else set()
+    for handler in handlers:
+        if id(handler) in seen:
+            continue
+        seen.add(id(handler))
+        formatter = getattr(handler, "formatter", None)
+        if _is_formatter(formatter):
+            return formatter
+        listener = getattr(handler, "listener", None)
+        nested_handlers = getattr(listener, "handlers", ()) if listener is not None else ()
+        formatter = _formatter_from_handlers(_as_iterable(nested_handlers), seen)
+        if formatter is not None:
+            return formatter
+        formatter = _formatter_from_handlers(_as_iterable(getattr(handler, "handlers", ())), seen)
+        if formatter is not None:
+            return formatter
+    return None
 
 
-def _structlog_formatter(logging_config: BaseLoggingConfig | None) -> dict[str, str] | None:
-    if not isinstance(logging_config, StructLoggingConfig) or logging_config.standard_lib_logging_config is None:
+def _formatter_from_config(logging_config: object | None) -> _LogFormatter | None:
+    standard_config = getattr(logging_config, "standard_lib_logging_config", None)
+    if standard_config is not None:
+        logging_config = standard_config
+
+    formatters = getattr(logging_config, "formatters", None)
+    handlers = getattr(logging_config, "handlers", None)
+    loggers = getattr(logging_config, "loggers", None)
+    root = getattr(logging_config, "root", None)
+    if not isinstance(formatters, Mapping) or not isinstance(handlers, Mapping):
         return None
-    formatter = _active_formatter(logging_config.standard_lib_logging_config)
-    return _serialized_formatter(formatter) if isinstance(formatter, dict) else None
 
+    logger_config = loggers.get("litestar", {}) if isinstance(loggers, Mapping) else {}
+    if not isinstance(logger_config, Mapping):
+        logger_config = {}
+    handler_names = _handler_names(logger_config.get("handlers"))
+    if not handler_names and isinstance(root, Mapping):
+        handler_names = _handler_names(root.get("handlers"))
 
-def _serialized_formatter(formatter_config: dict[str, Any]) -> dict[str, str] | None:
+    formatter_config = _formatter_config_from_handler_names(handler_names, handlers, formatters)
+    if formatter_config is None:
+        return None
+    if _is_formatter(formatter_config):
+        return cast("_LogFormatter", formatter_config)
+    if not isinstance(formatter_config, Mapping):
+        return None
     try:
-        formatter = logging.config.DictConfigurator({"version": 1}).configure_formatter(deepcopy(formatter_config))
+        formatter = logging.config.DictConfigurator({"version": 1}).configure_formatter(
+            deepcopy(dict(formatter_config))
+        )
+    except Exception as error:
+        raise _setup_error(error) from error
+    if not _is_formatter(formatter):
+        raise _setup_error(TypeError("configured formatter does not provide format()"))
+    return formatter
+
+
+def _formatter_config_from_handler_names(
+    handler_names: Sequence[str],
+    handlers: Mapping[object, object],
+    formatters: Mapping[object, object],
+) -> object | None:
+    pending = list(handler_names)
+    visited: set[str] = set()
+    while pending:
+        handler_name = pending.pop(0)
+        if handler_name in visited:
+            continue
+        visited.add(handler_name)
+        handler = handlers.get(handler_name)
+        if not isinstance(handler, Mapping):
+            continue
+        formatter_name = handler.get("formatter")
+        if isinstance(formatter_name, str) and formatter_name in formatters:
+            return formatters[formatter_name]
+        pending.extend(_handler_names(handler.get("handlers")))
+    return None
+
+
+def _handler_names(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _serialized_formatter(formatter: _LogFormatter) -> dict[str, str]:
+    try:
         payload = base64.b64encode(pickle.dumps(formatter, protocol=pickle.HIGHEST_PROTOCOL)).decode("ascii")
         load_serialized_formatter(payload)
-    except Exception:  # ruff: ignore[blind-except]
-        _logger.warning(
-            "Unable to recreate Litestar's active formatter in the Granian child; using the built-in log preset."
-        )
-        return None
+    except Exception as error:
+        raise _setup_error(error) from error
     return {
         "()": "litestar_granian.logging.load_serialized_formatter",
         "payload": payload,
     }
 
 
-def _active_formatter(logging_config: LoggingConfig) -> dict[str, Any] | None:
-    logger_config = logging_config.loggers.get("litestar", {})
-    handler_names = logger_config.get("handlers") or logging_config.root.get("handlers") or ()
-    pending = list(handler_names) if isinstance(handler_names, (list, tuple)) else [handler_names]
-    visited: set[str] = set()
-    while pending:
-        handler_name = pending.pop(0)
-        if not isinstance(handler_name, str) or handler_name in visited:
-            continue
-        visited.add(handler_name)
-        handler = logging_config.handlers.get(handler_name)
-        if not isinstance(handler, dict):
-            continue
-        formatter_name = handler.get("formatter")
-        if isinstance(formatter_name, str):
-            formatter = logging_config.formatters.get(formatter_name)
-            if isinstance(formatter, dict):
-                return formatter
-        nested_handlers = handler.get("handlers") or ()
-        if isinstance(nested_handlers, str):
-            pending.append(nested_handlers)
-        elif isinstance(nested_handlers, (list, tuple)):
-            pending.extend(nested_handlers)
-    return logging_config.formatters.get("standard")
+def _setup_error(error: Exception) -> _FormatterSetupError:
+    return _FormatterSetupError(
+        "Unable to reconstruct Litestar's active formatter for Granian. "
+        "Provide a complete Granian logging configuration with --log-config. "
+        f"Original error: {error}"
+    )
+
+
+def _is_formatter(value: object) -> bool:
+    return callable(getattr(value, "format", None))
+
+
+def _as_iterable(value: object) -> Iterable[object]:
+    if isinstance(value, (str, bytes)) or value is None:
+        return ()
+    if isinstance(value, Iterable):
+        return value
+    return ()

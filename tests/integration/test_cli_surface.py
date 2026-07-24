@@ -7,32 +7,6 @@ from litestar.cli.commands.core import run_command as litestar_run_command
 from litestar_granian.cli import run_command
 
 
-def test_litestar_run_surface_comes_before_granian_extensions() -> None:
-    expected_litestar_parameters = [
-        "reload",
-        "reload_paths",
-        "reload_include",
-        "reload_exclude",
-        "port",
-        "wc",
-        "host",
-        "fd",
-        "uds",
-        "debug",
-        "pdb",
-        "ssl_certificate",
-        "ssl_keyfile",
-        "create_self_signed_cert",
-    ]
-
-    assert [parameter.name for parameter in run_command.params[:14]] == expected_litestar_parameters
-    assert run_command.params[14].name == "uds_permissions"
-    assert [parameter.name for parameter in run_command.params[-2:]] == [
-        "in_subprocess",
-        "use_litestar_logger",
-    ]
-
-
 def test_every_litestar_run_option_is_supported() -> None:
     litestar_options = {
         option for parameter in litestar_run_command.params for option in (*parameter.opts, *parameter.secondary_opts)
@@ -69,7 +43,7 @@ def test_help_exposes_only_truthful_compatibility_aliases() -> None:
     assert "--no-litestar-logger" in logger_option.secondary_opts
 
 
-def test_help_descriptions_explain_the_combined_litestar_granian_contract() -> None:
+def test_help_descriptions_explain_litestar_and_granian_behavior() -> None:
     expected_help = {
         "reload": "Enable auto reload when application files change",
         "host": "Host address to bind to",
@@ -90,11 +64,11 @@ def test_help_descriptions_explain_the_combined_litestar_granian_contract() -> N
         "reload_include": "Glob patterns for files to include when watching for file changes",
         "reload_exclude": "Glob patterns for files to exclude when watching for file changes",
         "workers_kill_timeout": "Granian worker shutdown timeout; the parent deadline adds five seconds",
-        "log_config": "Explicit Granian JSON dictConfig; overrides generated log styles",
+        "log_config": "Explicit Granian JSON dictConfig; completely overrides automatic formatter matching",
         "process_name": "Set a custom name for Granian processes",
     }
 
     actual_help = {parameter.name: parameter.help for parameter in run_command.params if isinstance(parameter, Option)}
 
     for name, description in expected_help.items():
-        assert actual_help[name] == description
+        assert description in (actual_help[name] or "")

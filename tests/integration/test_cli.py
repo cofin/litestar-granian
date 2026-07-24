@@ -138,26 +138,18 @@ def test_litestar_prometheus_detection(component_name: str, component_module: st
     assert cli._has_litestar_prometheus_instrumentation(app)
 
 
-@pytest.mark.parametrize(
-    ("args", "message"),
-    [
-        (["--ssl-client-verify"], "--ssl-client-verify requires --ssl-ca"),
-    ],
-)
-def test_supervised_usage_errors(
+def test_ssl_client_verification_requires_ca(
     runner: CliRunner,
     root_command: LitestarGroup,
     app_file: Path,
-    args: list[str],
-    message: str,
 ) -> None:
     result = runner.invoke(
         root_command,
-        ["--app", f"{app_file.stem}:app", "run", *args],
+        ["--app", f"{app_file.stem}:app", "run", "--ssl-client-verify"],
     )
 
     assert result.exit_code == 2
-    assert message in result.output
+    assert "--ssl-client-verify requires --ssl-ca" in result.output
 
 
 @pytest.mark.parametrize(
@@ -315,8 +307,8 @@ def test_litestar_reload_filters_are_forwarded_and_enable_reload(
     [
         ("--in-subprocess", "--in-subprocess/--no-subprocess is deprecated and ignored"),
         ("--no-subprocess", "--in-subprocess/--no-subprocess is deprecated and ignored"),
-        ("--use-litestar-logger", "--use-litestar-logger/--no-litestar-logger is deprecated and ignored"),
-        ("--no-litestar-logger", "--use-litestar-logger/--no-litestar-logger is deprecated and ignored"),
+        ("--use-litestar-logger", "Granian formatting now matches Litestar automatically"),
+        ("--no-litestar-logger", "Granian formatting now matches Litestar automatically"),
     ],
 )
 def test_removed_boolean_options_warn_and_are_ignored(

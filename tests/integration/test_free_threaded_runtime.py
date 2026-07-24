@@ -75,7 +75,7 @@ def append_parent_marker(event: str) -> None:
         stream.write(f"{event}:{os.getpid()}\\n")
 
 
-class StressJSONFormatter(logging.Formatter):
+class RequestJSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         return json.dumps(
             {
@@ -87,7 +87,7 @@ class StressJSONFormatter(logging.Formatter):
         )
 
 
-class Sidecar(CLIPlugin):
+class ParentLifespanRecorder(CLIPlugin):
     @contextmanager
     def server_lifespan(self, app: Litestar):
         append_parent_marker("sidecar-start")
@@ -132,7 +132,7 @@ async def echo(socket: WebSocket) -> None:
 
 
 logging_config = LoggingConfig(
-    formatters={"stress": {"()": StressJSONFormatter}},
+    formatters={"stress": {"()": RequestJSONFormatter}},
     handlers={"stress": {"class": "logging.StreamHandler", "formatter": "stress", "stream": "ext://sys.stdout"}},
     loggers={
         "litestar": {"level": "INFO", "handlers": ["stress"], "propagate": False},
@@ -142,7 +142,7 @@ logging_config = LoggingConfig(
 
 app = Litestar(
     route_handlers=[work, echo],
-    plugins=[GranianPlugin(log_style="auto"), Sidecar()],
+    plugins=[GranianPlugin(), ParentLifespanRecorder()],
     logging_config=logging_config,
     on_startup=[startup],
     on_shutdown=[shutdown],
@@ -151,7 +151,7 @@ app = Litestar(
 
 
 @dataclass
-class _Server:
+class _RunningServer:
     process: subprocess.Popen[str]
     port: int
     events_path: Path
@@ -184,7 +184,7 @@ def _start_server(
     name: str,
     extra_args: Iterable[str] = (),
     extra_env: dict[str, str] | None = None,
-) -> _Server:
+) -> _RunningServer:
     app_file = create_app_file(f"free_threaded_{name}.py", content=_APP)
     events_path = tmp_path / f"{name}-events.jsonl"
     parent_marker = tmp_path / f"{name}-parent.txt"
@@ -225,7 +225,7 @@ def _start_server(
     except BaseException:
         terminate_process_group(process)
         raise
-    return _Server(
+    return _RunningServer(
         process=process,
         port=port,
         events_path=events_path,
@@ -235,7 +235,7 @@ def _start_server(
     )
 
 
-def _stop_server(server: _Server, *, timeout: float = 12) -> str:
+def _stop_server(server: _RunningServer, *, timeout: float = 12) -> str:
     if sys.platform == "win32":
         server.process.send_signal(signal.CTRL_BREAK_EVENT)
     else:
@@ -275,7 +275,7 @@ def _parse_structured_output(output: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in output.splitlines() if line.startswith("{")]
 
 
-def _assert_parent_lifecycle(server: _Server) -> None:
+def _assert_parent_lifecycle(server: _RunningServer) -> None:
     markers = server.parent_marker.read_text(encoding="utf-8").splitlines()
     starts = [line for line in markers if line.startswith("sidecar-start:")]
     stops = [line for line in markers if line.startswith("sidecar-stop:")]

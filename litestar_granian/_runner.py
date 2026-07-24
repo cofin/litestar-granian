@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class _LitestarReloadFilter(DefaultFilter):
+class _ReloadPatternFilter(DefaultFilter):
     """Apply Litestar's reload globs to Granian's reloader."""
 
     include_patterns: tuple[str, ...] = ()
@@ -69,12 +69,12 @@ def _configure_server() -> None:
     original_server = granian.cli.Server  # type: ignore[attr-defined]
     socket_holder_factory = cast("Callable[[int, bool, int], Any]", SocketHolder)
 
-    class CompatibilityServer(original_server):  # type: ignore[misc,valid-type]
+    class LitestarGranianServer(original_server):  # type: ignore[misc,valid-type]
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             if includes or excludes:
                 reload_filter = type(
                     "LitestarReloadFilter",
-                    (_LitestarReloadFilter,),
+                    (_ReloadPatternFilter,),
                     {"include_patterns": includes, "exclude_patterns": excludes},
                 )
                 kwargs["reload_filter"] = reload_filter
@@ -92,7 +92,7 @@ def _configure_server() -> None:
             self._sso = socket.socket(fileno=self._sfd)
             self._sso.set_inheritable(True)
 
-    setattr(granian.cli, "Server", CompatibilityServer)
+    setattr(granian.cli, "Server", LitestarGranianServer)
 
 
 def main() -> None:

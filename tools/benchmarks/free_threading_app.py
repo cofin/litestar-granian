@@ -33,5 +33,5 @@ async def websocket_correctness(socket: WebSocket) -> None:
 
 app = Litestar(
     route_handlers=[cpu, io, http2_correctness, websocket_correctness],
-    plugins=[GranianPlugin(log_style="json")],
+    plugins=[GranianPlugin()],
 )

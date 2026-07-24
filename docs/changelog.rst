@@ -17,7 +17,7 @@ Clean-break migration
 - ``--in-subprocess``/``--no-subprocess`` and
   ``--use-litestar-logger``/``--no-litestar-logger`` remain as deprecated
   no-op compatibility switches for 0.16. They warn when used and are planned
-  for removal in 0.17. Supervision and child-owned logging remain
+  for removal in 0.17. Supervision and automatic formatter matching remain
   unconditional.
 - Restored Litestar's ``-I``/``--reload-include`` and
   ``-E``/``--reload-exclude`` glob behavior. Reload directories and filters
@@ -51,22 +51,26 @@ Supervisor and lifespans
 Logging
 -------
 
-- Added ``auto``, ``native``, ``standard``, and ``json`` Granian log styles.
-- ``auto`` selects standard presentation for ``LoggingConfig``, JSON for
-  ``StructLoggingConfig``, and Granian-native presentation when Litestar has
-  no configured logger.
-- Generated presentation follows Litestar's active handler chain and creates a
-  fresh child-owned copy of the selected formatter. Safe scalar formatters,
-  callable/custom formatter classes, and importable structlog processor chains
-  retain the application's output automatically.
-- A genuinely non-transferable formatter falls back to the selected built-in
-  preset with a warning; explicit ``--log-config`` remains available for
-  independent child logging control.
-- Generated configurations contain direct stdout ``StreamHandler`` instances
-  only. Queue handlers, listeners, locks, configured loggers, and configured
-  handler instances are never transplanted; only formatter state is
-  reconstructed in the child.
-- Explicit ``--log-config`` wins completely.
+- Granian now matches Litestar's active compatible formatter automatically.
+  Direct handlers, queue-listener output handlers, propagation/root handlers,
+  and structurally compatible configuration fallback are supported without
+  classifying the formatter as standard, JSON, or structlog.
+- Formatter presentation is no longer a plugin mode or built-in schema.
+  Optional structlog and JSON packages remain application choices and are not
+  production dependencies of this plugin.
+- Generated configurations deep-copy Granian's native logging configuration
+  and replace only its ``generic`` and ``access`` formatters. Parent handlers,
+  queues, listeners, locks, loggers, and levels are never transplanted or
+  mutated.
+- One mode-600 generated file remains available for the complete supervised
+  lifetime so worker reload and respawn reuse the same formatter payload. It is
+  removed idempotently after normal exit, startup failure, signal termination,
+  or lifespan failure.
+- If no compatible formatter exists, Granian retains native formatting. If a
+  selected formatter cannot be reconstructed, startup fails before serving
+  with actionable ``--log-config`` guidance instead of silently changing
+  presentation.
+- Explicit ``--log-config`` bypasses matching and wins completely.
 
 Granian 2.7.9 parity
 --------------------
@@ -90,7 +94,7 @@ Granian 2.7.9 parity
   revised descriptions cover stable UDS support, the actual HTTP choices,
   supervised PDB propagation, HTTP/2 keep-alive units, Granian's PKCS#8
   key requirement, the parent shutdown deadline, and new logging-config
-  precedence. ``--granian-log-style`` has new help because it is a new option.
+  precedence.
 - Minimum dependencies are now ``litestar>=2.19.0`` and
   ``granian[all]>=2.7.9``. ``rloop``, ``uvloop``, and ``winloop`` extras are
   delegated through Granian; redundant direct ``httptools`` and

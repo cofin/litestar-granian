@@ -37,7 +37,6 @@ autodoc_class_signature = "separated"
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
 autodoc_type_aliases = {
-    "LogStyle": "Literal['auto', 'native', 'standard', 'json']",
     "StaticMode": "Literal['off', 'auto']",
 }
 autosectionlabel_prefix_document = True

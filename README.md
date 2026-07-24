@@ -91,8 +91,8 @@ On supported platforms, use the matching `rloop` or `winloop` extra and pass
   Granian workers, lifespans, and signals.
 - [Configuration](docs/guides/configuration.rst) — choose bindings, workers,
   protocols, TLS, reload, and event loops.
-- [Logging and metrics](docs/guides/logging-and-metrics.rst) — match Litestar
-  presentation or supply a Granian log configuration.
+- [Logging and metrics](docs/guides/logging-and-metrics.rst) — see how Granian
+  automatically matches Litestar's formatter or accepts a complete override.
 - [Deployment](docs/guides/deployment.rst) — forward signals and verify clean
   shutdown.
 - [CLI reference](docs/reference/cli.rst) — browse every option and environment

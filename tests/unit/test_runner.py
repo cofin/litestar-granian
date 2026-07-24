@@ -4,11 +4,11 @@ from pathlib import Path
 
 from watchfiles import Change
 
-from litestar_granian._runner import _LitestarReloadFilter
+from litestar_granian._runner import _ReloadPatternFilter
 
 
 def test_reload_filter_matches_litestar_uvicorn_include_and_exclude_globs() -> None:
-    reload_filter = _LitestarReloadFilter(
+    reload_filter = _ReloadPatternFilter(
         includes=("*.html",),
         excludes=("*.tmp", "ignored/*"),
     )

@@ -2,44 +2,57 @@
 Logging and metrics
 ===================
 
-Litestar and Granian run in separate processes, so they own separate logger
-and handler objects. The plugin can match presentation without copying live
-handlers, queues, listeners, locks, or configured loggers across that boundary.
+Granian automatically matches Litestar's active formatter. Configure logging
+once in Litestar; the Granian server and access loggers use the same standard,
+custom JSON, structlog, or other compatible formatter.
 
-Log styles
-==========
+Automatic formatter matching
+----------------------------
 
-``GranianPlugin(log_style=...)`` accepts:
+Litestar and Granian run in separate processes, so they must own separate
+logger and handler objects. Before serving, the plugin reads Litestar's active
+logging graph and reconstructs only the effective formatter in Granian's
+process. It follows:
 
-.. list-table::
-    :header-rows: 1
+- direct Litestar handlers;
+- queue-listener output handlers;
+- propagated and root handlers;
+- structurally compatible Litestar logging configuration when the active graph
+  has no formatter.
 
-    * - Style
-      - Granian presentation
-    * - ``auto``
-      - Match an active Litestar ``LoggingConfig`` or ``StructLoggingConfig``;
-        otherwise keep Granian-native output.
-    * - ``native``
-      - Use Granian's built-in presentation.
-    * - ``standard``
-      - Use a child-owned stdout handler with the active standard formatter.
-    * - ``json``
-      - Use the active structlog formatter, or the built-in JSON fields.
+Discovery is read-only. It does not call Litestar's ``configure()``, start or
+stop queue listeners, change logger levels, or retain application-owned
+formatter objects. The generated configuration is a deep copy of Granian's
+native logging configuration with only its ``generic`` and ``access``
+formatters replaced. Granian keeps its own handlers, loggers, streams, levels,
+queues, locks, and listener lifecycle.
 
-The generated configuration reconstructs a fresh formatter in the Granian
-child. If reconstruction fails, it warns and uses the selected built-in
-preset.
+The one mode-600 generated configuration remains available for the full
+supervised process lifetime, including worker reload and respawn, and is
+removed when the supervisor exits. Its serialized payload contains only the
+selected formatter's object graph, which can include formatter-owned state
+such as a structlog processor chain. It does not contain Litestar's logging
+configuration, handlers, queues, listeners, loggers, locks, or levels.
 
-Precedence is:
+If Litestar has no compatible formatter, Granian keeps its native formatting.
+If an active formatter is selected but cannot be reconstructed, startup stops
+with an error that directs you to ``--log-config`` instead of silently changing
+output.
 
-1. An explicit ``--log-config`` controls the entire Granian dictConfig.
-2. ``--granian-log-style`` overrides the plugin constructor.
-3. ``GranianPlugin(log_style=...)`` supplies the default.
+Optional formatting packages
+----------------------------
 
-Explicit JSON configuration
-===========================
+The plugin does not import or depend on structlog or a JSON logging package.
+Those choices work automatically when your application installs and configures
+a compatible formatter upstream.
 
-This complete example uses direct stdout handlers:
+Explicit configuration
+----------------------
+
+``--log-config`` is a complete Granian logging override. It bypasses automatic
+formatter matching.
+
+This example uses direct stdout handlers:
 
 .. literalinclude:: ../examples/logging.json
     :language: json
@@ -54,8 +67,11 @@ Granian logging and access logging remain separate. Use
 ``--granian-no-log`` to disable server logs and ``--granian-access-log`` to
 enable request logs.
 
+The retained ``--use-litestar-logger`` and ``--no-litestar-logger`` switches
+are deprecated no-ops. They warn that matching is automatic.
+
 Metrics
-========
+-------
 
 Metrics are disabled until ``--metrics`` is set:
 

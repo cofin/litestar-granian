@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import multiprocessing
 import sys
 from pathlib import Path
@@ -13,9 +14,18 @@ from granian.constants import HTTPModes, Loops
 from granian.log import LogLevels
 from litestar.logging import LoggingConfig
 
+from litestar_granian import command
 from litestar_granian.cli import _validate_cli_options, run_command
 from litestar_granian.command import _build_granian_command
+from litestar_granian.logging import build_logging_config
 from litestar_granian.plugin import GranianPlugin
+
+
+@pytest.fixture(autouse=True)
+def _isolate_litestar_logger(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLoggerClass()("litestar")
+    logger.propagate = False
+    monkeypatch.setattr(command, "build_logging_config", lambda config: build_logging_config(config, logger=logger))
 
 
 def _env(plugin: GranianPlugin | None = None, logging_config: object | None = None) -> Any:
@@ -55,7 +65,6 @@ def _options(**overrides: Any) -> dict[str, Any]:
         "static_path_dir_to_file": None,
         "static_path_expires": 86400,
         "log_config": None,
-        "granian_log_style": None,
     }
     options.update(overrides)
     return options
@@ -200,40 +209,36 @@ def test_explicit_log_config_wins_completely(tmp_path: Path) -> None:
     config_path.write_text('{"version": 1}')
 
     built = _build_granian_command(
-        _env(GranianPlugin(log_style="json"), LoggingConfig()),
-        _options(log_config=config_path, granian_log_style="standard"),
+        _env(GranianPlugin(), LoggingConfig()),
+        _options(log_config=config_path),
     )
 
     assert f"--log-config={config_path.resolve()}" in built.argv
     assert built.temporary_files == ()
 
 
-def test_cli_log_style_wins_over_plugin_and_generates_safe_config() -> None:
-    built = _build_granian_command(
-        _env(GranianPlugin(log_style="json"), LoggingConfig()),
-        _options(granian_log_style="standard"),
-    )
+def test_automatic_formatter_matching_generates_mode_600_config() -> None:
+    built = _build_granian_command(_env(GranianPlugin(), LoggingConfig()), _options())
     try:
         (config_path,) = built.temporary_files
         payload = json.loads(config_path.read_text())
-        assert payload["formatters"]["generic"].get("format")
-        assert payload["formatters"]["generic"].get("()") is None
+        assert payload["formatters"]["generic"]["()"] == "litestar_granian.logging.load_serialized_formatter"
+        assert config_path.stat().st_mode & 0o777 == 0o600
     finally:
         built.cleanup()
     assert not config_path.exists()
+    assert built.temporary_files == ()
 
 
-def test_plugin_log_style_applies_without_cli_override() -> None:
-    built = _build_granian_command(
-        _env(GranianPlugin(log_style="json"), LoggingConfig()),
-        _options(),
-    )
-    try:
-        (config_path,) = built.temporary_files
-        payload = json.loads(config_path.read_text())
-        assert payload["formatters"]["generic"]["()"] == "litestar_granian.logging.JSONFormatter"
-    finally:
-        built.cleanup()
+def test_no_logging_config_keeps_granian_native_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    logger = logging.getLogger("litestar")
+    monkeypatch.setattr(logger, "handlers", [])
+    monkeypatch.setattr(logger, "propagate", False)
+
+    built = _build_granian_command(_env(GranianPlugin(), None), _options())
+
+    assert not any(argument.startswith("--log-config=") for argument in built.argv)
+    assert built.temporary_files == ()
 
 
 def test_ssl_client_verification_requires_ca() -> None:
@@ -273,7 +278,6 @@ def test_v016_help_preserves_litestar_and_deprecated_compatibility_options() -> 
     assert "--no-subprocess" in option_names
     assert "--use-litestar-logger" in option_names
     assert "--no-litestar-logger" in option_names
-    assert "--granian-log-style" in option_names
     assert "--reload-include" in option_names
     assert "--reload-exclude" in option_names
     assert "-I" in option_names
@@ -370,7 +374,7 @@ def test_litestar_reload_environment_values_are_comma_separated(name: str) -> No
 
 
 def test_every_native_option_exposes_a_granian_environment_source() -> None:
-    litestar_only = {"debug", "pdb", "create_self_signed_cert", "granian_log_style"}
+    litestar_only = {"debug", "pdb", "create_self_signed_cert"}
 
     for parameter in run_command.params:
         if parameter.name in litestar_only:

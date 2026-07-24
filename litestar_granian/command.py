@@ -8,10 +8,10 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from litestar_granian.logging import build_logging_config, resolve_log_style
-from litestar_granian.plugin import GranianPlugin, LogStyle
+from litestar_granian.logging import build_logging_config
+from litestar_granian.plugin import GranianPlugin
 from litestar_granian.static import _resolve_static_mounts
 
 if TYPE_CHECKING:
@@ -19,18 +19,19 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class _BuiltCommand:
+class _GranianCommand:
     argv: list[str]
     temporary_files: tuple[Path, ...] = ()
     environment: dict[str, str] = field(default_factory=dict)
     pass_fds: tuple[int, ...] = ()
 
     def cleanup(self) -> None:
-        for path in self.temporary_files:
+        temporary_files, self.temporary_files = self.temporary_files, ()
+        for path in temporary_files:
             path.unlink(missing_ok=True)
 
 
-def _build_granian_command(env: "LitestarEnv", options: Mapping[str, Any]) -> _BuiltCommand:
+def _build_granian_command(env: "LitestarEnv", options: Mapping[str, Any]) -> _GranianCommand:
     """Build one native Granian command from the Litestar-facing options.
 
     Returns:
@@ -134,13 +135,11 @@ def _build_granian_command(env: "LitestarEnv", options: Mapping[str, Any]) -> _B
     explicit_log_config = options.get("log_config")
     if explicit_log_config is not None:
         _add_value(argv, "log-config", explicit_log_config, absolute_path=True)
-        return _BuiltCommand(argv, environment=environment, pass_fds=pass_fds)
+        return _GranianCommand(argv, environment=environment, pass_fds=pass_fds)
 
-    requested_style = cast("LogStyle", options.get("granian_log_style") or plugin.log_style)
-    resolved_style = resolve_log_style(requested_style, env.app.logging_config)
-    log_config = build_logging_config(resolved_style, env.app.logging_config)
+    log_config = build_logging_config(env.app.logging_config)
     if log_config is None:
-        return _BuiltCommand(argv, environment=environment, pass_fds=pass_fds)
+        return _GranianCommand(argv, environment=environment, pass_fds=pass_fds)
 
     fd, raw_path = tempfile.mkstemp(prefix="litestar-granian-", suffix=".json")
     config_path = Path(raw_path)
@@ -151,7 +150,7 @@ def _build_granian_command(env: "LitestarEnv", options: Mapping[str, Any]) -> _B
         config_path.unlink(missing_ok=True)
         raise
     _add_value(argv, "log-config", config_path, absolute_path=True)
-    return _BuiltCommand(argv, (config_path,), environment, pass_fds)
+    return _GranianCommand(argv, (config_path,), environment, pass_fds)
 
 
 def _get_plugin(env: "LitestarEnv") -> GranianPlugin:

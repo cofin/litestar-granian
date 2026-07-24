@@ -16,7 +16,8 @@ Deprecated compatibility options
     * - ``--in-subprocess`` / ``--no-subprocess``
       - Deprecated no-op; supervision is always used.
     * - ``--use-litestar-logger`` / ``--no-litestar-logger``
-      - Deprecated no-op; use ``--granian-log-style`` or ``--log-config``.
+      - Deprecated no-op; Granian now matches Litestar's formatter
+        automatically. Use ``--log-config`` for a complete override.
 
 The deprecated switches warn when used and are planned for removal in v0.17.
 
@@ -40,6 +41,8 @@ Behavior to review
 - ``--ssl-client-verify`` requires ``--ssl-ca``.
 - Metrics remain explicit and disabled by default.
 - The parent hard-shutdown deadline is the worker timeout plus five seconds.
+- Standard, custom JSON, structlog, and other compatible Litestar formatters
+  are matched automatically; no plugin logging-mode selection is needed.
 
 Read :doc:`../reference/compatibility` for environment precedence and package
 requirements.

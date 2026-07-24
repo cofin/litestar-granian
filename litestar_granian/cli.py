@@ -8,7 +8,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from click import Choice, UsageError
+from click import UsageError
 from click.exceptions import Exit
 from granian.cli import Duration, OctalIntType, _pretty_print_default
 from granian.cli import EnumType as GranianEnumType
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from litestar import Litestar
 
 
-class EnumType(GranianEnumType):
+class _EnumChoice(GranianEnumType):
     """A Click type that returns members of the supplied enum."""
 
     def __init__(self, enum: Any, case_sensitive: bool = False) -> None:
@@ -70,7 +70,6 @@ _OPTIONS_WITHOUT_GRANIAN_ENV = {
     "--pdb",
     "--use-pdb",
     "--create-self-signed-cert",
-    "--granian-log-style",
 }
 
 
@@ -208,7 +207,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 @option("--uds-permissions", type=OctalIntType(), help="Unix Domain Socket permissions (octal)")
 @option(
     "--http",
-    type=EnumType(HTTPModes),
+    type=_EnumChoice(HTTPModes),
     default=HTTPModes.auto,
     help="HTTP version to use: auto, HTTP/1, or HTTP/2",
 )
@@ -235,12 +234,12 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 )
 @option(
     "--runtime-mode",
-    type=EnumType(RuntimeModes),
+    type=_EnumChoice(RuntimeModes),
     default=RuntimeModes.auto,
     help="Granian Rust runtime mode (single/multi-threaded/auto-detect); ASGI auto resolves to multi-threaded",
 )
-@option("--loop", type=EnumType(Loops), default=Loops.auto, help="Event loop implementation")
-@option("--task-impl", type=EnumType(TaskImpl), default=TaskImpl.asyncio, help="Async task implementation to use")
+@option("--loop", type=_EnumChoice(Loops), default=Loops.auto, help="Event loop implementation")
+@option("--task-impl", type=_EnumChoice(TaskImpl), default=TaskImpl.asyncio, help="Async task implementation to use")
 @option(
     "--backlog",
     type=IntRange(128),
@@ -334,16 +333,9 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 @option(
     "--granian-log-level",
     "log_level",
-    type=EnumType(LogLevels),
+    type=_EnumChoice(LogLevels),
     default=LogLevels.info,
     help="Log level",
-)
-@option(
-    "--granian-log-style",
-    type=Choice(["auto", "native", "standard", "json"]),
-    default=None,
-    help="Granian log presentation; overrides GranianPlugin(log_style=...)",
-    envvar="LITESTAR_GRANIAN_LOG_STYLE",
 )
 @option(
     "--granian-access-log/--granian-no-access-log",
@@ -355,7 +347,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 @option("--ssl-keyfile-password", help="SSL key password")
 @option(
     "--ssl-protocol-min",
-    type=EnumType(SSLProtocols),
+    type=_EnumChoice(SSLProtocols),
     default=SSLProtocols.tls13,
     help="Set the minimum supported protocol for SSL connections.",
 )
@@ -497,7 +489,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 @option(
     "--log-config",
     type=ClickPath(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),  # type: ignore[type-var]
-    help="Explicit Granian JSON dictConfig; overrides generated log styles",
+    help="Explicit Granian JSON dictConfig; completely overrides automatic formatter matching",
 )
 @option(
     "--metrics/--no-metrics",
@@ -522,7 +514,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 @option(
     "--use-litestar-logger/--no-litestar-logger",
     default=None,
-    help="Deprecated compatibility option; use --granian-log-style or --log-config.",
+    help="Deprecated compatibility option; formatter matching is automatic.",
     envvar="LITESTAR_GRANIAN_USE_LITESTAR_LOGGER",
 )
 def run_command(
@@ -560,7 +552,6 @@ def run_command(
     log_access_enabled: bool,
     log_access_fmt: str | None,
     log_level: LogLevels,
-    granian_log_style: str | None,
     ssl_certificate: Path | None,
     ssl_keyfile: Path | None,
     ssl_keyfile_password: str | None,
@@ -677,22 +668,21 @@ def _run_supervised(
     workers_kill_timeout: int,
     port: int,
 ) -> int:
-    supervisor = _GranianSupervisor(
-        built_command.argv,
-        kill_timeout=workers_kill_timeout,
-        environment=built_command.environment,
-        pass_fds=built_command.pass_fds,
-    )
-    signal_forwarder = _SignalForwarder(supervisor)
-    previous_app = os.environ.get("LITESTAR_APP")
-    had_app = "LITESTAR_APP" in os.environ
-    previous_port = os.environ.get("LITESTAR_PORT")
-    had_port = "LITESTAR_PORT" in os.environ
-    os.environ["LITESTAR_APP"] = env.app_path
-    os.environ["LITESTAR_PORT"] = str(port)
-
     with ExitStack() as stack:
         stack.callback(built_command.cleanup)
+        supervisor = _GranianSupervisor(
+            built_command.argv,
+            kill_timeout=workers_kill_timeout,
+            environment=built_command.environment,
+            pass_fds=built_command.pass_fds,
+        )
+        signal_forwarder = _SignalForwarder(supervisor)
+        previous_app = os.environ.get("LITESTAR_APP")
+        had_app = "LITESTAR_APP" in os.environ
+        previous_port = os.environ.get("LITESTAR_PORT")
+        had_port = "LITESTAR_PORT" in os.environ
+        os.environ["LITESTAR_APP"] = env.app_path
+        os.environ["LITESTAR_PORT"] = str(port)
         stack.callback(_restore_environment, "LITESTAR_APP", had_app, previous_app)
         stack.callback(_restore_environment, "LITESTAR_PORT", had_port, previous_port)
         stack.callback(signal_forwarder.restore)
@@ -746,7 +736,7 @@ def _warn_deprecated_compatibility_options(
     if use_litestar_logger is not None:
         console.print(
             "[yellow]Warning:[/] --use-litestar-logger/--no-litestar-logger is deprecated and ignored; "
-            "use --granian-log-style or --log-config."
+            "Granian formatting now matches Litestar automatically. Use --log-config for a complete override."
         )
 
 

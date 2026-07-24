@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from litestar_granian import cli
-from litestar_granian.command import _BuiltCommand
+from litestar_granian.command import _GranianCommand
 
 
 def test_supervised_runtime_keeps_handlers_and_app_env_through_lifespan_exit(
@@ -103,8 +103,42 @@ def test_supervised_runtime_removes_generated_log_config(
     monkeypatch.setattr(cli, "_GranianSupervisor", MagicMock(return_value=supervisor))
     monkeypatch.setattr(cli, "_SignalForwarder", MagicMock())
     monkeypatch.setattr(cli, "_server_lifespan", lifespan)
-    built = _BuiltCommand(["granian"], (config_path,))
+    built = _GranianCommand(["granian"], (config_path,))
     env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
 
     assert cli._run_supervised(env, built, workers_kill_timeout=5, port=9000) == 0
+    assert not config_path.exists()
+
+
+def test_supervised_runtime_removes_generated_config_if_supervisor_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "generated-log-config.json"
+    config_path.write_text('{"version": 1}')
+    monkeypatch.setattr(cli, "_GranianSupervisor", MagicMock(side_effect=RuntimeError("supervisor setup failed")))
+    built = _GranianCommand(["granian"], (config_path,))
+    env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
+
+    with pytest.raises(RuntimeError, match="supervisor setup failed"):
+        cli._run_supervised(env, built, workers_kill_timeout=5, port=9000)
+
+    assert not config_path.exists()
+
+
+def test_supervised_runtime_removes_generated_config_if_lifespan_entry_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "generated-log-config.json"
+    config_path.write_text('{"version": 1}')
+    lifespan = MagicMock()
+    lifespan.__enter__.side_effect = RuntimeError("lifespan failed")
+    monkeypatch.setattr(cli, "_server_lifespan", MagicMock(return_value=lifespan))
+    built = _GranianCommand(["granian"], (config_path,))
+    env: Any = SimpleNamespace(app=object(), app_path="resolved:app")
+
+    with pytest.raises(RuntimeError, match="lifespan failed"):
+        cli._run_supervised(env, built, workers_kill_timeout=5, port=9000)
+
     assert not config_path.exists()

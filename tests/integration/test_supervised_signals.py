@@ -45,7 +45,7 @@ def append_marker(value: str) -> None:
         stream.write(value + "\\n")
 
 
-class Sidecar(CLIPlugin):
+class LifespanRecorder(CLIPlugin):
     @contextmanager
     def server_lifespan(self, app: Litestar):
         append_marker("sidecar-start")
@@ -72,7 +72,7 @@ async def health() -> dict[str, str]:
 
 app = Litestar(
     route_handlers=[health],
-    plugins=[GranianPlugin(log_style="auto"), Sidecar()],
+    plugins=[GranianPlugin(), LifespanRecorder()],
     logging_config=StructLoggingConfig() if os.environ.get("SUPERVISOR_STRUCTURED") else LoggingConfig(),
     on_startup=[app_startup],
     on_shutdown=[app_shutdown],

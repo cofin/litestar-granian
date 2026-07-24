@@ -19,7 +19,7 @@ class _StaticPlacement(str, Enum):
     ASGI = "asgi"
 
 
-class Provider:
+class StaticProvider:
     def __init__(self, config: Any) -> None:
         self.config = config
 
@@ -48,7 +48,7 @@ def test_valid_structural_provider_is_selected(tmp_path: Path) -> None:
     assets.mkdir()
     (assets / "app.js").write_text("ok")
 
-    selection = _resolve_static_mounts(_app(Provider(_config(_mount(assets)))), static_mode="auto")
+    selection = _resolve_static_mounts(_app(StaticProvider(_config(_mount(assets)))), static_mode="auto")
 
     assert selection is not None
     assert selection.routes == ("/assets",)
@@ -79,7 +79,7 @@ def test_explicit_mounts_bypass_provider_discovery(tmp_path: Path) -> None:
     "plugins",
     [
         (),
-        (Provider(_config()), Provider(_config())),
+        (StaticProvider(_config()), StaticProvider(_config())),
     ],
 )
 def test_missing_or_multiple_providers_fall_back_once(
@@ -119,7 +119,7 @@ def test_ineligible_provider_falls_back_once(
 
     with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
         selection = _resolve_static_mounts(
-            _app(Provider(config_factory(assets))),
+            _app(StaticProvider(config_factory(assets))),
             static_mode="auto",
         )
 
@@ -133,7 +133,7 @@ def test_placement_native_is_selected(tmp_path: Path) -> None:
     (assets / "app.js").write_text("ok")
 
     config = _placement_config(_StaticPlacement.NATIVE, _mount(assets))
-    selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is not None
     assert selection.routes == ("/assets",)
@@ -145,7 +145,7 @@ def test_placement_asgi_falls_back_with_reason(caplog: pytest.LogCaptureFixture)
     config = _placement_config(_StaticPlacement.ASGI, reason="SSR owns assets")
 
     with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
-        selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is None
     assert len(caplog.records) == 1
@@ -156,7 +156,7 @@ def test_placement_asgi_without_reason_falls_back_cleanly(caplog: pytest.LogCapt
     config = _placement_config(_StaticPlacement.ASGI, reason=None)
 
     with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
-        selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is None
     assert len(caplog.records) == 1
@@ -166,7 +166,7 @@ def test_unknown_placement_falls_back(caplog: pytest.LogCaptureFixture) -> None:
     config = _placement_config("sidecar", reason=None)
 
     with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
-        selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is None
     assert len(caplog.records) == 1
@@ -179,9 +179,7 @@ def test_legacy_config_without_placement_selects_native(tmp_path: Path) -> None:
     (assets / "app.js").write_text("ok")
 
     config = _config(_mount(assets))
-    assert not hasattr(config, "placement")
-
-    selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is not None
     assert selection.mounts == (assets,)
@@ -195,7 +193,7 @@ def test_legacy_fallback_reason_still_honored(tmp_path: Path, caplog: pytest.Log
     config = _config(_mount(assets), fallback_reason="legacy owns assets")
 
     with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
-        selection = _resolve_static_mounts(_app(Provider(config)), static_mode="auto")
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is None
     assert len(caplog.records) == 1

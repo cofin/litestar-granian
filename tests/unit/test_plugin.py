@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Literal
 from unittest.mock import MagicMock
 
 import pytest
@@ -30,25 +30,21 @@ def test_on_cli_init_registers_run_command_on_supplied_group() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "attribute", "expected"),
+    "static",
     [
-        ({}, "static", "off"),
-        ({}, "log_style", "auto"),
-        ({"static": "auto"}, "static", "auto"),
-        ({"log_style": "json"}, "log_style", "json"),
+        "off",
+        "auto",
     ],
 )
-def test_plugin_configuration(kwargs: dict[str, Any], attribute: str, expected: str) -> None:
-    assert getattr(GranianPlugin(**kwargs), attribute) == expected
+def test_plugin_configuration(static: Literal["off", "auto"]) -> None:
+    plugin = GranianPlugin(static=static)
+
+    assert plugin.static == static
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [{"static": "invalid"}, {"log_style": "colourful"}],
-)
-def test_plugin_rejects_invalid_configuration(kwargs: dict[str, Any]) -> None:
+def test_plugin_rejects_invalid_static_configuration() -> None:
     with pytest.raises(ValueError):
-        GranianPlugin(**kwargs)
+        GranianPlugin(static="invalid")  # type: ignore[arg-type]
 
 
 def test_on_app_init_does_not_mutate_or_eagerly_configure_logging() -> None:
