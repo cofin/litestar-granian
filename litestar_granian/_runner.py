@@ -68,10 +68,22 @@ def _granian_version() -> str:
 
 
 def _accepts_three_positional_arguments(candidate: Any) -> bool:
+    """Check the candidate's signature when one is introspectable.
+
+    Native extension classes do not expose a signature on every platform
+    build, so an unavailable signature is treated as compatible.
+
+    Returns:
+        Whether three positional arguments are accepted as far as the
+        available signature information can prove.
+    """
     try:
         signature = inspect.signature(candidate)
-        signature.bind(1, 2, 3)
     except (TypeError, ValueError):
+        return True
+    try:
+        signature.bind(1, 2, 3)
+    except TypeError:
         return False
     return True
 

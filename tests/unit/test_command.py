@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import multiprocessing
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -272,7 +273,9 @@ def test_static_route_and_mount_counts_must_match(tmp_path: Path) -> None:
 def test_certificate_authority_must_exist(tmp_path: Path) -> None:
     missing = tmp_path / "ca.pem"
 
-    with pytest.raises(UsageError, match=f"File provided for --ssl-ca was not found: {missing.resolve()}"):
+    with pytest.raises(
+        UsageError, match=f"File provided for --ssl-ca was not found: {re.escape(str(missing.resolve()))}"
+    ):
         _validate(ssl_client_verify=True, ssl_ca=missing)
 
 
@@ -297,7 +300,9 @@ def test_certificate_and_key_must_exist_without_self_signed_generation(tmp_path:
     keyfile = tmp_path / "key.pem"
     certificate.write_text("certificate")
 
-    with pytest.raises(UsageError, match=f"File provided for --ssl-keyfile was not found: {keyfile.resolve()}"):
+    with pytest.raises(
+        UsageError, match=f"File provided for --ssl-keyfile was not found: {re.escape(str(keyfile.resolve()))}"
+    ):
         _validate(ssl_certificate=certificate, ssl_keyfile=keyfile)
 
 
@@ -305,7 +310,9 @@ def test_certificate_path_must_not_be_a_directory(tmp_path: Path) -> None:
     keyfile = tmp_path / "key.pem"
     keyfile.write_text("key")
 
-    with pytest.raises(UsageError, match=f"Path provided for --ssl-certfile is a directory: {tmp_path.resolve()}"):
+    with pytest.raises(
+        UsageError, match=f"Path provided for --ssl-certfile is a directory: {re.escape(str(tmp_path.resolve()))}"
+    ):
         _validate(ssl_certificate=tmp_path, ssl_keyfile=keyfile)
 
 

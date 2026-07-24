@@ -1,6 +1,7 @@
 """Release-version configuration tests."""
 
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -49,11 +50,11 @@ def test_current_prerelease_can_finalize_without_advancing_release_line() -> Non
     if not current_version.is_prerelease:
         pytest.skip("current project version is already stable")
 
-    bump_my_version = Path(sys.executable).with_name("bump-my-version")
-    assert bump_my_version.is_file()
+    bump_my_version = shutil.which("bump-my-version", path=str(Path(sys.executable).parent))
+    assert bump_my_version is not None
     result = subprocess.run(
         [
-            str(bump_my_version),
+            bump_my_version,
             "bump",
             "--dry-run",
             "--verbose",

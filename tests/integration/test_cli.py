@@ -19,11 +19,6 @@ if TYPE_CHECKING:
     from tests.conftest import CreateAppFileFixture
 
 
-def _argument_value(argv: list[str], prefix: str) -> Path:
-    (value,) = [argument.removeprefix(prefix) for argument in argv if argument.startswith(prefix)]
-    return Path(value)
-
-
 _ANSI_ESCAPES = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _PANEL_CHARACTERS = re.compile(r"[│╭╮╰╯─]")
 

@@ -117,8 +117,8 @@ def wait_for_descendants_to_exit(pids: set[int], *, parent_pid: int | None = Non
     raise AssertionError(message)
 
 
-def wait_for_markers(marker: Path, value: str, count: int) -> None:
-    deadline = time.monotonic() + 15
+def wait_for_markers(marker: Path, value: str, count: int, *, timeout: float = 15) -> None:
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if marker.exists() and marker.read_text(encoding="utf-8").splitlines().count(value) >= count:
             return

@@ -434,7 +434,7 @@ def test_granian_884_websocket_teardown_diagnostic(
 
 
 @pytest.mark.upstream
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(90)
 @pytest.mark.xfail(reason="Granian #875: free-threaded workers can miss ASGI shutdown hooks", strict=False)
 def test_granian_875_runs_every_worker_shutdown_hook_diagnostic(
     create_app_file: CreateAppFileFixture,

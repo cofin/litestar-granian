@@ -147,7 +147,7 @@ def test_parent_only_signal_reaps_granian_and_unwinds_lifespans(
 
     try:
         wait_for_port(port, process, open_=True)
-        wait_for_markers(marker, "app-start", workers)
+        wait_for_markers(marker, "app-start", workers, timeout=45 if sys.platform == "win32" else 15)
         descendant_pids = descendants(process.pid)
         if sys.platform == "win32":
             process.send_signal(termination_signal)

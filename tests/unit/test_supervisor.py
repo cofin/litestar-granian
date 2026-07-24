@@ -301,7 +301,7 @@ def test_windows_uses_process_group_and_list_taskkill(monkeypatch: pytest.Monkey
 def test_windows_expired_deadline_kills_process_group(monkeypatch: pytest.MonkeyPatch) -> None:
     process = MagicMock(pid=456)
     process.poll.return_value = None
-    process.wait.side_effect = [subprocess.TimeoutExpired("granian", 0.1), -signal.SIGKILL]
+    process.wait.side_effect = [subprocess.TimeoutExpired("granian", 0.1), -9]
     popen = MagicMock(return_value=process)
     taskkill = MagicMock()
     monotonic = MagicMock(side_effect=[10.0, 21.0])
@@ -317,7 +317,7 @@ def test_windows_expired_deadline_kills_process_group(monkeypatch: pytest.Monkey
     supervisor.forward(signal.SIGTERM)
     exit_code = supervisor.run()
 
-    assert exit_code == 128 + signal.SIGKILL
+    assert exit_code == 128 + 9
     assert supervisor.deadline == pytest.approx(20.0)
     process.send_signal.assert_called_once()
     taskkill.assert_called_once_with(

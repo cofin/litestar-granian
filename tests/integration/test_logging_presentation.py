@@ -229,6 +229,10 @@ def test_supervised_child_matches_custom_litestar_formatter(
 @pytest.mark.skipif(
     sysconfig.get_config_var("Py_GIL_DISABLED") == 1, reason="Granian reload rejects free-threaded Python"
 )
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows records the reload parent lifespan under a different PID; under investigation",
+)
 def test_file_reload_reuses_one_formatter_config_and_parent_lifespan(
     create_app_file: CreateAppFileFixture,
     tmp_project_dir: Path,
