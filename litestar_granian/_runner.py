@@ -4,6 +4,7 @@ import inspect
 import json
 import os
 import socket
+import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -67,22 +68,31 @@ def _granian_version() -> str:
         return "unknown"
 
 
-def _accepts_three_positional_arguments(candidate: Any) -> bool:
-    """Check the candidate's signature when one is introspectable.
+if sys.platform == "win32":
+    _SOCKET_HOLDER_PARAMETERS: tuple[str, ...] = ("fd",)
+elif sys.platform == "linux" or sys.platform.startswith("freebsd"):
+    _SOCKET_HOLDER_PARAMETERS = ("fd", "uds", "backlog")
+else:
+    _SOCKET_HOLDER_PARAMETERS = ("fd", "uds")
 
-    Native extension classes do not expose a signature on every platform
-    build, so an unavailable signature is treated as compatible.
+
+def _accepts_socket_holder_arguments(candidate: Any) -> bool:
+    """Check the candidate against this platform's SocketHolder constructor.
+
+    Granian compiles a different ``SocketHolder`` constructor per platform,
+    and native extension classes do not expose a signature on every build,
+    so an unavailable signature is treated as compatible.
 
     Returns:
-        Whether three positional arguments are accepted as far as the
-        available signature information can prove.
+        Whether the platform's positional arguments are accepted as far as
+        the available signature information can prove.
     """
     try:
         signature = inspect.signature(candidate)
     except (TypeError, ValueError):
         return True
     try:
-        signature.bind(1, 2, 3)
+        signature.bind(*range(len(_SOCKET_HOLDER_PARAMETERS)))
     except TypeError:
         return False
     return True
@@ -111,8 +121,8 @@ def _probe_granian_compatibility(granian_cli: Any) -> None:
     except ImportError:
         problems.append("granian._granian.SocketHolder is missing")
     else:
-        if not _accepts_three_positional_arguments(SocketHolder):
-            problems.append("granian._granian.SocketHolder no longer accepts (fd, uds, backlog)")
+        if not _accepts_socket_holder_arguments(SocketHolder):
+            problems.append(f"granian._granian.SocketHolder no longer accepts ({', '.join(_SOCKET_HOLDER_PARAMETERS)})")
 
     if problems:
         message = (
@@ -131,7 +141,7 @@ def _configure_server(granian_cli: Any) -> None:
     raw_fd = os.getenv("LITESTAR_GRANIAN_FILE_DESCRIPTOR")
     inherited_fd = int(raw_fd) if raw_fd is not None else None
     original_server = granian_cli.Server
-    socket_holder_factory = cast("Callable[[int, bool, int], Any]", SocketHolder)
+    socket_holder_factory = cast("Callable[..., Any]", SocketHolder)
 
     class LitestarGranianServer(original_server):  # type: ignore[misc,valid-type]
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -149,9 +159,10 @@ def _configure_server(granian_cli: Any) -> None:
                 super()._init_shared_socket()
                 return
             inherited_socket = socket.socket(fileno=inherited_fd)
-            is_uds = inherited_socket.family == socket.AF_UNIX
+            is_uds = inherited_socket.family == getattr(socket, "AF_UNIX", object())
             inherited_socket.detach()
-            self._shd = socket_holder_factory(inherited_fd, is_uds, self.backlog)
+            holder_values = {"fd": inherited_fd, "uds": is_uds, "backlog": self.backlog}
+            self._shd = socket_holder_factory(*(holder_values[name] for name in _SOCKET_HOLDER_PARAMETERS))
             self._sfd = self._shd.get_fd()
             self._sso = socket.socket(fileno=self._sfd)
             self._sso.set_inheritable(True)

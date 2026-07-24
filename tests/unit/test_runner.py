@@ -59,12 +59,12 @@ def test_probe_fails_when_socket_holder_signature_is_incompatible(monkeypatch: p
     import granian._granian
     import granian.cli
 
-    monkeypatch.setattr(granian._granian, "SocketHolder", lambda _fd: None)
+    monkeypatch.setattr(granian._granian, "SocketHolder", lambda: None)
 
     with pytest.raises(SystemExit) as exc_info:
         _probe_granian_compatibility(granian.cli)
 
-    assert "granian._granian.SocketHolder no longer accepts (fd, uds, backlog)" in str(exc_info.value)
+    assert "granian._granian.SocketHolder no longer accepts (" in str(exc_info.value)
 
 
 def test_probe_fails_when_socket_holder_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
