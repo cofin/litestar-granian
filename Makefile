@@ -46,7 +46,7 @@ install: destroy clean                              ## Install the project, depe
 	@echo "${INFO} Starting fresh installation..."
 	@uv python pin 3.12 >/dev/null 2>&1
 	@uv venv >/dev/null 2>&1
-	@uv sync --all-extras --dev
+	@uv sync
 	@echo "${OK} Installation complete! 🎉"
 
 .PHONY: destroy
@@ -84,33 +84,47 @@ build:                                             ## Build the project
 	@echo "${OK} Package build complete"
 
 .PHONY: release
-release:                                           ## Bump version and create release tag: make release bump=patch|minor|major
-	@echo "${INFO} Preparing for release... 📦"
-	@make docs
+release:                                           ## Finalize a pre-release, or bump a stable release with bump=patch|minor|major
+	@current_version="$$(uv run bump-my-version show current_version 2>/dev/null)"
+	@release_version=""
+	@if [[ "$$current_version" == *-* ]]; then \
+		release_version="$${current_version%%-*}"; \
+		echo "${INFO} Finalizing pre-release $$current_version as $$release_version... 📦"; \
+	elif [ -z "$(bump)" ]; then \
+		echo "${ERROR} Current version $$current_version is stable. Usage: make release bump=major|minor|patch"; \
+		exit 1; \
+	else \
+		echo "${INFO} Preparing release bump ($(bump)) from $$current_version... 📦"; \
+	fi
 	@make clean
-	@make build
-	@uv run bump-my-version bump $(bump)
+	@if [ -n "$$release_version" ]; then \
+		uv run bump-my-version bump --new-version "$$release_version" pre; \
+	else \
+		uv run bump-my-version bump "$(bump)"; \
+	fi
 	@uv lock --upgrade-package litestar-granian >/dev/null 2>&1
+	@make docs
+	@make build
 	@echo "${OK} Release complete 🎉"
 
 .PHONY: pre-release
-pre-release:                                       ## Start a pre-release: make pre-release version=0.15.0-alpha.1
+pre-release:                                       ## Set a pre-release: make pre-release version=0.16.0-beta.1
 	@if [ -z "$(version)" ]; then \
 		echo "${ERROR} Usage: make pre-release version=X.Y.Z-alpha.N"; \
 		echo ""; \
 		echo "Pre-release workflow:"; \
-		echo "  1. Start alpha:     make pre-release version=0.15.0-alpha.1"; \
-		echo "  2. Next alpha:      make pre-release version=0.15.0-alpha.2"; \
-		echo "  3. Move to beta:    make pre-release version=0.15.0-beta.1"; \
-		echo "  4. Move to rc:      make pre-release version=0.15.0-rc.1"; \
-		echo "  5. Final release:   make release bump=patch (from rc) OR bump=minor (from stable)"; \
+		echo "  1. Start alpha:     make pre-release version=0.16.0-alpha.1"; \
+		echo "  2. Next alpha:      make pre-release version=0.16.0-alpha.2"; \
+		echo "  3. Move to beta:    make pre-release version=0.16.0-beta.1"; \
+		echo "  4. Move to rc:      make pre-release version=0.16.0-rc.1"; \
+		echo "  5. Final release:   make release"; \
 		exit 1; \
 	fi
 	@echo "${INFO} Preparing pre-release $(version)... 🧪"
 	@make clean
-	@make build
 	@uv run bump-my-version bump --new-version $(version) pre
 	@uv lock --upgrade-package litestar-granian >/dev/null 2>&1
+	@make build
 	@echo "${OK} Pre-release $(version) complete 🧪"
 	@echo ""
 	@echo "${INFO} Next steps:"
@@ -228,11 +242,11 @@ docs: docs-clean                                   ## Build documentation
 .PHONY: docs-linkcheck
 docs-linkcheck:                                    ## Check documentation links
 	@echo "${INFO} Checking documentation links... 🔗"
-	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -D linkcheck_ignore='http://.*','https://.*'
+	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -W
 	@echo "${OK} Link check complete"
 
 .PHONY: docs-linkcheck-full
 docs-linkcheck-full:                               ## Run full documentation link check
 	@echo "${INFO} Running full link check... 🔗"
-	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -D linkcheck_anchors=0
+	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -W -D linkcheck_anchors=0
 	@echo "${OK} Full link check complete"

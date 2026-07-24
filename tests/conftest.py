@@ -5,9 +5,10 @@ import operator
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, Callable, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import pytest
 from click.testing import CliRunner

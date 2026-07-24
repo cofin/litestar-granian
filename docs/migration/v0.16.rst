@@ -1,0 +1,45 @@
+===================
+Migrating to v0.16
+===================
+
+The command remains ``litestar run``. Version 0.16 replaces the old execution
+choices with one supervised Granian child process group.
+
+Deprecated compatibility options
+================================
+
+.. list-table::
+    :header-rows: 1
+
+    * - v0.15 option
+      - v0.16 behavior
+    * - ``--in-subprocess`` / ``--no-subprocess``
+      - Deprecated no-op; supervision is always used.
+    * - ``--use-litestar-logger`` / ``--no-litestar-logger``
+      - Deprecated no-op; use ``--granian-log-style`` or ``--log-config``.
+
+The deprecated switches warn when used and are planned for removal in v0.17.
+
+Retained Litestar aliases
+=========================
+
+- ``-R`` and ``--reload-dir`` add native ``--reload-paths`` values.
+- ``-I`` / ``--reload-include`` and ``-E`` / ``--reload-exclude`` retain
+  Litestar glob filtering and enable reload.
+- ``-U`` and ``--unix-domain-socket`` alias native ``--uds``.
+- ``-F`` / ``--fd`` / ``--file-descriptor`` pass an inherited socket on
+  POSIX.
+- ``--pdb`` / ``--use-pdb`` retain Litestar debugger-on-exception behavior.
+
+Behavior to review
+==================
+
+- ``--workers`` has a minimum of one and no CPU-derived maximum.
+- Protocol-specific settings are forwarded only for the selected HTTP mode.
+- HTTP/2-only mode disables WebSockets.
+- ``--ssl-client-verify`` requires ``--ssl-ca``.
+- Metrics remain explicit and disabled by default.
+- The parent hard-shutdown deadline is the worker timeout plus five seconds.
+
+Read :doc:`../reference/compatibility` for environment precedence and package
+requirements.

@@ -32,7 +32,7 @@ repos:
     rev: v0.6.0
     hooks:
       - id: ensure-dunder-all
-        exclude: "test*|tools"
+        exclude: "test*|tools|docs"
         args: ["--use-tuple"]
   - repo: https://github.com/ariebovenberg/slotscheck
     rev: v0.20.1
@@ -43,10 +43,3 @@ repos:
     rev: "v1.0.2"
     hooks:
       - id: sphinx-lint
-  - repo: local
-    hooks:
-      - id: pypi-readme
-        name: pypi-readme
-        language: python
-        entry: python tools/pypi_readme.py
-        types: [markdown]

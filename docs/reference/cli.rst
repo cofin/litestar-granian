@@ -1,7 +1,9 @@
 ===
-cli
+CLI
 ===
 
-.. automodule:: litestar_granian.cli
-    :members:
-    :undoc-members:
+The plugin registers this command as ``litestar run``:
+
+.. click:: litestar_granian.cli:run_command
+    :prog: litestar run
+    :nested: full

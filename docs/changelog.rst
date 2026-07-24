@@ -6,6 +6,131 @@ All commits to this project will be documented in this file.
 
 Litestar Granian Changelog
 
+0.16.0
+======
+
+Clean-break migration
+---------------------
+
+- ``litestar run`` now has one execution model: the Litestar parent enters
+  server lifespans once and supervises a fresh Granian child process group.
+- ``--in-subprocess``/``--no-subprocess`` and
+  ``--use-litestar-logger``/``--no-litestar-logger`` remain as deprecated
+  no-op compatibility switches for 0.16. They warn when used and are planned
+  for removal in 0.17. Supervision and child-owned logging remain
+  unconditional.
+- Restored Litestar's ``-I``/``--reload-include`` and
+  ``-E``/``--reload-exclude`` glob behavior. Reload directories and filters
+  now enable reload automatically, matching ``litestar run``.
+- Added Litestar-compatible ``-F``/``--fd``/``--file-descriptor`` inherited
+  socket support on POSIX.
+- Added Litestar-compatible ``-U`` and ``--unix-domain-socket`` aliases for
+  Granian's retained native ``--uds`` option.
+- ``--pdb``/``--use-pdb`` and ``LITESTAR_PDB=true`` now propagate
+  Litestar's ``pdb_on_exception`` behavior into Granian workers.
+- Granian metrics are explicit and disabled by default. When ``--metrics`` is
+  used without Litestar Prometheus middleware, the command warns that only
+  Granian server and worker metrics will be exported.
+- The deprecated ``InitPluginProtocol`` base is replaced by ``InitPlugin``.
+
+Supervisor and lifespans
+------------------------
+
+- POSIX starts Granian in a new session and forwards signals to the process
+  group. Windows uses a new process group, ``CTRL_BREAK_EVENT`` for graceful
+  shutdown, and list-based ``taskkill`` only after escalation.
+- The first termination signal is forwarded once and starts a deadline equal
+  to ``--workers-kill-timeout`` plus five seconds. A second signal or expired
+  deadline kills the Granian process group.
+- Litestar's server lifespans remain active until Granian exits and are still
+  unwound after forced termination.
+- The resolved application path is available to server-lifespan sidecars as
+  ``LITESTAR_APP`` and the previous environment value is restored afterward.
+- Granian's exact child status is returned; signal exits use ``128 + signal``.
+
+Logging
+-------
+
+- Added ``auto``, ``native``, ``standard``, and ``json`` Granian log styles.
+- ``auto`` selects standard presentation for ``LoggingConfig``, JSON for
+  ``StructLoggingConfig``, and Granian-native presentation when Litestar has
+  no configured logger.
+- Generated presentation follows Litestar's active handler chain and creates a
+  fresh child-owned copy of the selected formatter. Safe scalar formatters,
+  callable/custom formatter classes, and importable structlog processor chains
+  retain the application's output automatically.
+- A genuinely non-transferable formatter falls back to the selected built-in
+  preset with a warning; explicit ``--log-config`` remains available for
+  independent child logging control.
+- Generated configurations contain direct stdout ``StreamHandler`` instances
+  only. Queue handlers, listeners, locks, configured loggers, and configured
+  handler instances are never transplanted; only formatter state is
+  reconstructed in the child.
+- Explicit ``--log-config`` wins completely.
+
+Granian 2.7.9 parity
+--------------------
+
+- The plugin continues to own Litestar's ``run`` command surface and translates
+  it to Granian. Litestar aliases are retained where their semantics match,
+  Granian-native option spellings remain available, and both environment
+  namespaces are accepted for equivalent settings with explicit
+  ``LITESTAR_*`` precedence.
+- CLI help now presents every standard Litestar ``run`` option first, in
+  Litestar's order, followed by Granian-specific extensions and then the
+  deprecated compatibility shims.
+- Removed the CPU-derived worker ceiling; ``--workers`` now validates only a
+  minimum of one.
+- HTTP mode forwarding is protocol-aware. ``auto`` receives HTTP/1 and HTTP/2
+  settings, HTTP/1 receives only HTTP/1 settings, and HTTP/2 receives only
+  HTTP/2 settings with WebSockets disabled.
+- Updated every HTTP/2 numeric range to Granian 2.7.9.
+- ``--ssl-client-verify`` now requires ``--ssl-ca``.
+- Existing help descriptions are preserved unless behavior changed. The seven
+  revised descriptions cover stable UDS support, the actual HTTP choices,
+  supervised PDB propagation, HTTP/2 keep-alive units, Granian's PKCS#8
+  key requirement, the parent shutdown deadline, and new logging-config
+  precedence. ``--granian-log-style`` has new help because it is a new option.
+- Minimum dependencies are now ``litestar>=2.19.0`` and
+  ``granian[all]>=2.7.9``. ``rloop``, ``uvloop``, and ``winloop`` extras are
+  delegated through Granian; redundant direct ``httptools`` and
+  ``websockets`` dependencies are removed.
+
+Static serving
+--------------
+
+- Added ``GranianPlugin(static="auto")`` as a structural consumer of one
+  plugin exposing ``get_static_server_config()``.
+- Discovery validates local absolute routes, existing non-empty directories,
+  consistent directory-index values, and explicit fallback reasons.
+- Missing, multiple, malformed, or ineligible providers produce one INFO
+  fallback and leave serving to Litestar. Explicit CLI mounts always win.
+
+Documentation and release repair
+--------------------------------
+
+- Replaced the stale direct/subprocess guide with beginner-first process,
+  signal, logging, deployment, native-option, and migration documentation.
+- Replaced the custom multiversion Pages builder with the official
+  configure/upload/deploy actions and one current site artifact.
+- Corrected project URLs to
+  ``https://cofin.github.io/litestar-granian/`` and removed ``latest/``
+  assumptions.
+
+Known upstream limitations
+--------------------------
+
+- Granian's open shutdown defect remains tracked in `#875
+  <https://github.com/emmett-framework/granian/issues/875>`_. Granian 2.7.9
+  may force-kill workers without running their ASGI shutdown hooks. On
+  free-threaded Python it may report all worker threads stopped while still
+  missing some shutdown hooks.
+- Granian 2.7.9 rejects reload on free-threaded Python.
+- Granian metrics remain explicit because of the open shutdown panic in `#881
+  <https://github.com/emmett-framework/granian/issues/881>`_.
+- The PyO3 pointer panic remains tracked in `#884
+  <https://github.com/emmett-framework/granian/issues/884>`_.
+
 0.15.0
 ======
 

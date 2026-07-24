@@ -1,14 +1,14 @@
-==============
-Code Reference
-==============
+=========
+Reference
+=========
 
-The usage documentation is for end users of the library. It provides an high-level
-overview of what features are available and how to use them.
-
-
+Use the Python reference for the package constructor and metadata. Use the CLI
+reference for the exhaustive option, default, range, alias, and environment
+variable list.
 
 .. toctree::
     :titlesonly:
-    :glob:
 
-    *
+    plugin
+    cli
+    compatibility

@@ -1,35 +1,36 @@
-#version-warning {
-  top: 0;
-  position: sticky;
-  z-index: 60;
-  width: 100%;
-  height: 2.5rem;
-  display: flex;
-  column-gap: 0.5rem;
-  justify-content: center;
-  justify-items: center;
-  align-items: center;
-  background-color: #eee;
-  border-bottom: 2px solid #ae2828;
+html[data-accent-color="amber"] {
+  --accent-9: #d99a12;
+  --accent-a9: rgb(217 154 18 / 82%);
+  --accent-a11: rgb(181 119 0 / 94%);
 }
 
-@media (prefers-color-scheme: dark) {
-  body:not([data-theme="light"]) #version-warning {
-    background-color: black;
+header img,
+nav img {
+  max-height: 2rem;
+  width: auto;
+}
+
+article {
+  max-width: 82ch;
+}
+
+article .sd-grid,
+article .sphinx-click {
+  max-width: 100%;
+}
+
+.sd-card {
+  height: 100%;
+}
+
+div.highlight,
+div.highlight pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 48rem) {
+  article {
+    max-width: 100%;
   }
-}
-
-.breaking-change {
-  font-variant: all-small-caps;
-  margin-left: 0.4rem;
-  color: #f55353;
-}
-
-p {
-  font-size: 1.1em;
-}
-
-html[data-theme="dark"] .mermaid svg {
-  background-color: white;
-  padding: 1em;
 }

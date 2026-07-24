@@ -1,84 +1,64 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from typing import Any
+from unittest.mock import MagicMock
+
 import pytest
 from click import Group
 from litestar.config.app import AppConfig
-from litestar.logging.config import LoggingConfig
-from litestar.plugins import CLIPluginProtocol, InitPluginProtocol
+from litestar.logging import LoggingConfig
+from litestar.plugins import CLIPluginProtocol, InitPlugin
 
-from litestar_granian.plugin import GranianPlugin, _inject_granian_loggers
-
-
-class MockCLIPlugin(InitPluginProtocol, CLIPluginProtocol):
-    def on_cli_init(self, cli: Group) -> None:
-        return None
+from litestar_granian.cli import run_command
+from litestar_granian.plugin import GranianPlugin
 
 
-@pytest.fixture
-def cli_group() -> Group:
-    return Group()
-
-
-def test_on_cli_init_registers_run_command(cli_group: Group) -> None:
-    """Plugin must register the ``run`` command on the Litestar CLI group."""
+def test_plugin_uses_current_litestar_base_classes() -> None:
     plugin = GranianPlugin()
-    plugin.on_cli_init(cli_group)
 
-    # The real registration target is ``litestar.cli.main.litestar_group``, not the
-    # group we pass in. Assert against that so the test reflects actual behavior.
-    from litestar.cli.main import litestar_group
-
-    assert "run" in litestar_group.commands
+    assert isinstance(plugin, InitPlugin)
+    assert isinstance(plugin, CLIPluginProtocol)
 
 
-def test_inject_granian_loggers_adds_when_missing() -> None:
-    config = LoggingConfig(loggers={})
-    _inject_granian_loggers(config)
-    assert "_granian" in config.loggers
-    assert "granian.access" in config.loggers
-    assert config.loggers["_granian"]["level"] == "INFO"
+def test_on_cli_init_registers_run_command_on_supplied_group() -> None:
+    cli_group = Group()
+
+    GranianPlugin().on_cli_init(cli_group)
+
+    assert cli_group.commands["run"] is run_command
 
 
-def test_inject_granian_loggers_preserves_existing() -> None:
-    """Regression guard for the unguarded update at old plugin.py:53-58."""
-    config = LoggingConfig(
-        loggers={
-            "_granian": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
-        }
-    )
-    _inject_granian_loggers(config)
-    # Existing level must not be clobbered
-    assert config.loggers["_granian"]["level"] == "DEBUG"
-    # Missing sibling is still injected
-    assert "granian.access" in config.loggers
+@pytest.mark.parametrize(
+    ("kwargs", "attribute", "expected"),
+    [
+        ({}, "static", "off"),
+        ({}, "log_style", "auto"),
+        ({"static": "auto"}, "static", "auto"),
+        ({"log_style": "json"}, "log_style", "json"),
+    ],
+)
+def test_plugin_configuration(kwargs: dict[str, Any], attribute: str, expected: str) -> None:
+    assert getattr(GranianPlugin(**kwargs), attribute) == expected
 
 
-def test_inject_granian_loggers_noop_for_none() -> None:
-    """Must not raise when given ``None`` (defensive for callers behind TypeGuard)."""
-    _inject_granian_loggers(None)
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"static": "invalid"}, {"log_style": "colourful"}],
+)
+def test_plugin_rejects_invalid_configuration(kwargs: dict[str, Any]) -> None:
+    with pytest.raises(ValueError):
+        GranianPlugin(**kwargs)
 
 
-def test_on_app_init_injects_loggers_for_standard_config() -> None:
-    plugin = GranianPlugin()
+def test_on_app_init_does_not_mutate_or_eagerly_configure_logging() -> None:
     logging_config = LoggingConfig(loggers={})
+    before = deepcopy(logging_config)
+    logging_config.configure = MagicMock()  # type: ignore[method-assign]
     app_config = AppConfig(logging_config=logging_config)
-    plugin.on_app_init(app_config)
-    assert "_granian" in logging_config.loggers
-    assert "granian.access" in logging_config.loggers
 
+    result = GranianPlugin().on_app_init(app_config)
 
-def test_on_app_init_preserves_user_granian_config() -> None:
-    plugin = GranianPlugin()
-    logging_config = LoggingConfig(
-        loggers={"_granian": {"level": "DEBUG", "handlers": ["console"], "propagate": False}}
-    )
-    app_config = AppConfig(logging_config=logging_config)
-    plugin.on_app_init(app_config)
-    assert logging_config.loggers["_granian"]["level"] == "DEBUG"
-
-
-def test_on_app_init_handles_missing_logging_config() -> None:
-    plugin = GranianPlugin()
-    app_config = AppConfig(logging_config=None)
-    # Must not raise.
-    plugin.on_app_init(app_config)
+    assert result is app_config
+    assert logging_config.loggers == before.loggers
+    logging_config.configure.assert_not_called()
