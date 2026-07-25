@@ -8,7 +8,7 @@ import queue
 import threading
 from copy import deepcopy
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from granian.log import LOGGING_CONFIG
@@ -234,10 +234,12 @@ def test_structlog_formatter_removes_dictconfig_live_state_on_serialization() ->
         logging.config.dictConfig(config)
         logger = logging.getLogger("litestar")
 
-        queue_handler = logger.handlers[0]
-        output_handler = logging._handlers["output"]  # type: ignore[attr-defined]
-        listener = logging.handlers.QueueListener(queue_handler.queue, output_handler)  # type: ignore[attr-defined]
-        queue_handler.listener = listener  # type: ignore[attr-defined]
+        queue_handler = cast("logging.handlers.QueueHandler", logger.handlers[0])
+        logging_handlers = cast("dict[str, logging.Handler]", logging._handlers)  # pyright: ignore[reportAttributeAccessIssue]
+
+        output_handler = logging_handlers["output"]
+        listener = logging.handlers.QueueListener(queue_handler.queue, output_handler)
+        setattr(queue_handler, "listener", listener)
 
         granian_config = build_logging_config(None, logger=logger)
         assert granian_config is not None
@@ -278,6 +280,7 @@ def test_structlog_formatter_removes_dictconfig_live_state_on_serialization() ->
         _check_no_live_state(reconstructed.__dict__)
         assert json.loads(reconstructed.format(_record()))["application"] == "example"
     finally:
-        logging._handlers.pop("output", None)  # type: ignore[attr-defined]
-        logging._handlers.pop("queue", None)  # type: ignore[attr-defined]
+        handlers_dict = cast("dict[str, logging.Handler]", getattr(logging, "_handlers", {}))
+        handlers_dict.pop("output", None)
+        handlers_dict.pop("queue", None)
         logging.getLogger("litestar").handlers.clear()
