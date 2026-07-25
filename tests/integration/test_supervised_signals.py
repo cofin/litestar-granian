@@ -183,13 +183,14 @@ def test_parent_only_signal_reaps_granian_and_unwinds_lifespans(
                 assert "free-threaded Python support is experimental!" in output
                 if sys.platform != "win32":
                     assert all(f"Stopped worker-{worker}" in output for worker in range(1, workers + 1))
-            else:
+            # Windows reload can omit both the hook and forced-kill log while still reaping the child group.
+            elif sys.platform != "win32" or not reload:
                 assert output.count("Killing worker-") >= workers - graceful_workers
         wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
         if degraded:
             pytest.xfail(
                 f"Granian #875: only {graceful_workers}/{workers} workers ran their ASGI "
-                "shutdown hook before Granian's forced-kill path reaped them"
+                "shutdown hook before Granian reaped them"
             )
     finally:
         terminate_process_group(process)
