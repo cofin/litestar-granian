@@ -34,6 +34,19 @@ class JSONFormatter(logging.Formatter):
         return json.dumps({"level": record.levelname.lower(), "message": record.getMessage()}, sort_keys=True)
 
 
+class SlottedFormatter(logging.Formatter):
+    """User-defined formatter that stores presentation state in a slot."""
+
+    __slots__ = ("prefix",)
+
+    def __init__(self, *, prefix: str) -> None:
+        super().__init__()
+        self.prefix = prefix
+
+    def format(self, record: logging.LogRecord) -> str:
+        return f"{self.prefix}::{record.getMessage()}"
+
+
 class AddApplicationFields:
     """Stateful structlog processor representative of an application processor."""
 
@@ -163,6 +176,15 @@ def test_user_defined_json_formatter_is_recreated_automatically() -> None:
         "level": "warning",
         "message": "served request",
     }
+
+
+def test_slotted_formatter_state_is_preserved_on_reconstruction() -> None:
+    logger, _ = _logger_with_handler(SlottedFormatter(prefix="slotted"))
+
+    config = build_logging_config(None, logger=logger)
+
+    assert config is not None
+    assert _configured_formatter(config["formatters"]["generic"]).format(_record()) == "slotted::served request"
 
 
 def test_optional_structlog_formatter_is_recreated_without_production_classification() -> None:
