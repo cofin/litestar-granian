@@ -660,6 +660,7 @@ def run_command(
         env,
         built_command,
         workers_kill_timeout=workers_kill_timeout,
+        host=host,
         port=port,
     )
 
@@ -674,6 +675,7 @@ def _run_supervised(
     built_command: _GranianCommand,
     *,
     workers_kill_timeout: int,
+    host: str,
     port: int,
 ) -> int:
     with ExitStack() as stack:
@@ -685,14 +687,12 @@ def _run_supervised(
             pass_fds=built_command.pass_fds,
         )
         signal_forwarder = _SignalForwarder(supervisor)
-        previous_app = os.environ.get("LITESTAR_APP")
-        had_app = "LITESTAR_APP" in os.environ
-        previous_port = os.environ.get("LITESTAR_PORT")
-        had_port = "LITESTAR_PORT" in os.environ
-        os.environ["LITESTAR_APP"] = env.app_path
-        os.environ["LITESTAR_PORT"] = str(port)
-        stack.callback(_restore_environment, "LITESTAR_APP", had_app, previous_app)
-        stack.callback(_restore_environment, "LITESTAR_PORT", had_port, previous_port)
+        exports = (("LITESTAR_APP", env.app_path), ("LITESTAR_HOST", host), ("LITESTAR_PORT", str(port)))
+        for name, value in exports:
+            previous = os.environ.get(name)
+            existed = name in os.environ
+            os.environ[name] = value
+            stack.callback(_restore_environment, name, existed, previous)
         stack.callback(signal_forwarder.restore)
         stack.enter_context(_server_lifespan(env.app))
         signal_forwarder.install()
