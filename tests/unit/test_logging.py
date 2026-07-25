@@ -8,7 +8,7 @@ import queue
 import threading
 from copy import deepcopy
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from granian.log import LOGGING_CONFIG
@@ -32,6 +32,19 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         return json.dumps({"level": record.levelname.lower(), "message": record.getMessage()}, sort_keys=True)
+
+
+class SlottedFormatter(logging.Formatter):
+    """User-defined formatter that stores presentation state in a slot."""
+
+    __slots__ = ("prefix",)
+
+    def __init__(self, *, prefix: str) -> None:
+        super().__init__()
+        self.prefix = prefix
+
+    def format(self, record: logging.LogRecord) -> str:
+        return f"{self.prefix}::{record.getMessage()}"
 
 
 class AddApplicationFields:
@@ -165,6 +178,15 @@ def test_user_defined_json_formatter_is_recreated_automatically() -> None:
     }
 
 
+def test_slotted_formatter_state_is_preserved_on_reconstruction() -> None:
+    logger, _ = _logger_with_handler(SlottedFormatter(prefix="slotted"))
+
+    config = build_logging_config(None, logger=logger)
+
+    assert config is not None
+    assert _configured_formatter(config["formatters"]["generic"]).format(_record()) == "slotted::served request"
+
+
 def test_optional_structlog_formatter_is_recreated_without_production_classification() -> None:
     structlog = pytest.importorskip("structlog")
     formatter = structlog.stdlib.ProcessorFormatter(
@@ -192,3 +214,95 @@ def test_selected_formatter_reconstruction_failure_is_actionable() -> None:
 
     with pytest.raises(RuntimeError, match="--log-config"):
         build_logging_config(None, logger=logger)
+
+
+def test_structlog_formatter_removes_dictconfig_live_state_on_serialization() -> None:
+    structlog = pytest.importorskip("structlog")
+
+    config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "structlog": {
+                "()": structlog.stdlib.ProcessorFormatter,
+                "processors": [
+                    structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                    structlog.processors.JSONRenderer(sort_keys=True),
+                ],
+                "foreign_pre_chain": [
+                    AddApplicationFields("example"),
+                ],
+            }
+        },
+        "handlers": {
+            "queue": {
+                "class": "logging.handlers.QueueHandler",
+                "queue": queue.Queue(),
+            },
+            "output": {
+                "class": "logging.StreamHandler",
+                "formatter": "structlog",
+            },
+        },
+        "loggers": {
+            "litestar": {
+                "handlers": ["queue"],
+                "propagate": False,
+            }
+        },
+    }
+
+    try:
+        logging.config.dictConfig(config)
+        logger = logging.getLogger("litestar")
+
+        queue_handler = cast("logging.handlers.QueueHandler", logger.handlers[0])
+        logging_handlers = cast("dict[str, logging.Handler]", logging._handlers)  # pyright: ignore[reportAttributeAccessIssue]
+
+        output_handler = logging_handlers["output"]
+        listener = logging.handlers.QueueListener(queue_handler.queue, output_handler)
+        setattr(queue_handler, "listener", listener)
+
+        granian_config = build_logging_config(None, logger=logger)
+        assert granian_config is not None
+
+        payload = granian_config["formatters"]["generic"]["payload"]
+
+        import base64
+        import pickle  # ruff: ignore[suspicious-pickle-import]
+
+        reconstructed = pickle.loads(base64.b64decode(payload.encode("ascii")))  # ruff: ignore[suspicious-pickle-usage]
+
+        def _check_no_live_state(obj: Any, visited: set[int] | None = None) -> None:
+            if visited is None:
+                visited = set()
+            if id(obj) in visited:
+                return
+            visited.add(id(obj))
+
+            if isinstance(obj, list):
+                assert type(obj) is list
+                for item in obj:
+                    _check_no_live_state(item, visited)
+            elif isinstance(obj, dict):
+                assert type(obj) is dict
+                for v in obj.values():
+                    _check_no_live_state(v, visited)
+
+            type_name = type(obj).__name__
+            assert type_name not in (
+                "ConvertingList",
+                "DictConfigurator",
+                "QueueHandler",
+                "QueueListener",
+                "StreamHandler",
+                "RLock",
+            )
+
+        _check_no_live_state(reconstructed.__dict__)
+        assert json.loads(reconstructed.format(_record()))["application"] == "example"
+    finally:
+        handlers_dict = cast("dict[str, logging.Handler]", getattr(logging, "_handlers", {}))
+        handlers_dict.pop("output", None)
+        handlers_dict.pop("queue", None)
+        logging.getLogger("litestar").handlers.clear()

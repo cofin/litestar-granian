@@ -8,6 +8,7 @@ import logging.config
 import pickle  # ruff: ignore[suspicious-pickle-import]
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
+from types import MemberDescriptorType
 from typing import Any, Protocol, cast
 
 from granian.log import LOGGING_CONFIG
@@ -178,8 +179,31 @@ def _handler_names(value: object) -> list[str]:
 
 
 def _serialized_formatter(formatter: _LogFormatter) -> dict[str, str]:
+    formatter_type = type(formatter)
+    clone = formatter_type.__new__(formatter_type)
+    state = getattr(formatter, "__dict__", None)
+
+    if isinstance(state, dict):
+        detached_state = state.copy()
+        for key in ("processors", "foreign_pre_chain"):
+            if key in detached_state and detached_state[key] is not None:
+                detached_state[key] = list(detached_state[key])
+        clone.__dict__.update(detached_state)
+
+    for formatter_class in formatter_type.__mro__:
+        for key, descriptor in vars(formatter_class).items():
+            if not isinstance(descriptor, MemberDescriptorType):
+                continue
+            try:
+                value = descriptor.__get__(formatter, formatter_type)
+            except AttributeError:
+                continue
+            if key in {"processors", "foreign_pre_chain"} and value is not None:
+                value = list(value)
+            descriptor.__set__(clone, value)
+
     try:
-        payload = base64.b64encode(pickle.dumps(formatter, protocol=pickle.HIGHEST_PROTOCOL)).decode("ascii")
+        payload = base64.b64encode(pickle.dumps(clone, protocol=pickle.HIGHEST_PROTOCOL)).decode("ascii")
         load_serialized_formatter(payload)
     except Exception as error:
         raise _setup_error(error) from error
