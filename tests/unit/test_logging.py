@@ -192,3 +192,92 @@ def test_selected_formatter_reconstruction_failure_is_actionable() -> None:
 
     with pytest.raises(RuntimeError, match="--log-config"):
         build_logging_config(None, logger=logger)
+
+
+def test_structlog_formatter_removes_dictconfig_live_state_on_serialization() -> None:
+    structlog = pytest.importorskip("structlog")
+
+    config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "structlog": {
+                "()": structlog.stdlib.ProcessorFormatter,
+                "processors": [
+                    structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                    structlog.processors.JSONRenderer(sort_keys=True),
+                ],
+                "foreign_pre_chain": [
+                    AddApplicationFields("example"),
+                ],
+            }
+        },
+        "handlers": {
+            "queue": {
+                "class": "logging.handlers.QueueHandler",
+                "queue": queue.Queue(),
+            },
+            "output": {
+                "class": "logging.StreamHandler",
+                "formatter": "structlog",
+            },
+        },
+        "loggers": {
+            "litestar": {
+                "handlers": ["queue"],
+                "propagate": False,
+            }
+        },
+    }
+
+    try:
+        logging.config.dictConfig(config)
+        logger = logging.getLogger("litestar")
+
+        queue_handler = logger.handlers[0]
+        output_handler = logging._handlers["output"]  # type: ignore[attr-defined]
+        listener = logging.handlers.QueueListener(queue_handler.queue, output_handler)  # type: ignore[attr-defined]
+        queue_handler.listener = listener  # type: ignore[attr-defined]
+
+        granian_config = build_logging_config(None, logger=logger)
+        assert granian_config is not None
+
+        payload = granian_config["formatters"]["generic"]["payload"]
+
+        import base64
+        import pickle  # ruff: ignore[suspicious-pickle-import]
+
+        reconstructed = pickle.loads(base64.b64decode(payload.encode("ascii")))  # ruff: ignore[suspicious-pickle-usage]
+
+        def _check_no_live_state(obj: Any, visited: set[int] | None = None) -> None:
+            if visited is None:
+                visited = set()
+            if id(obj) in visited:
+                return
+            visited.add(id(obj))
+
+            if isinstance(obj, list):
+                assert type(obj) is list
+                for item in obj:
+                    _check_no_live_state(item, visited)
+            elif isinstance(obj, dict):
+                assert type(obj) is dict
+                for v in obj.values():
+                    _check_no_live_state(v, visited)
+
+            type_name = type(obj).__name__
+            assert type_name not in (
+                "ConvertingList",
+                "DictConfigurator",
+                "QueueHandler",
+                "QueueListener",
+                "StreamHandler",
+                "RLock",
+            )
+
+        _check_no_live_state(reconstructed.__dict__)
+        assert json.loads(reconstructed.format(_record()))["application"] == "example"
+    finally:
+        logging._handlers.pop("output", None)  # type: ignore[attr-defined]
+        logging._handlers.pop("queue", None)  # type: ignore[attr-defined]
+        logging.getLogger("litestar").handlers.clear()

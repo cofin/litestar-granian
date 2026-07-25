@@ -178,8 +178,17 @@ def _handler_names(value: object) -> list[str]:
 
 
 def _serialized_formatter(formatter: _LogFormatter) -> dict[str, str]:
+    clone = formatter.__class__.__new__(formatter.__class__)
+    state = formatter.__dict__.copy()
+
+    for key in ("processors", "foreign_pre_chain"):
+        if key in state and state[key] is not None:
+            state[key] = list(state[key])
+
+    clone.__dict__.update(state)
+
     try:
-        payload = base64.b64encode(pickle.dumps(formatter, protocol=pickle.HIGHEST_PROTOCOL)).decode("ascii")
+        payload = base64.b64encode(pickle.dumps(clone, protocol=pickle.HIGHEST_PROTOCOL)).decode("ascii")
         load_serialized_formatter(payload)
     except Exception as error:
         raise _setup_error(error) from error

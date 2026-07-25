@@ -9,8 +9,8 @@ Litestar Granian Changelog
 0.16.0
 ======
 
-Clean-break migration
----------------------
+Modified behavior
+-----------------
 
 - ``litestar run`` now has one execution model: the Litestar parent enters
   server lifespans once and supervises a fresh Granian child process group.
@@ -44,8 +44,9 @@ Supervisor and lifespans
   deadline kills the Granian process group.
 - Litestar's server lifespans remain active until Granian exits and are still
   unwound after forced termination.
-- The resolved application path is available to server-lifespan sidecars as
-  ``LITESTAR_APP`` and the previous environment value is restored afterward.
+- The resolved application path, bind host, and bind port are available to
+  server-lifespan sidecars as ``LITESTAR_APP``, ``LITESTAR_HOST``, and
+  ``LITESTAR_PORT``, and previous environment values are restored afterward.
 - Granian's exact child status is returned; signal exits use ``128 + signal``.
 
 Logging

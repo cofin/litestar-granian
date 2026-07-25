@@ -826,7 +826,7 @@ wheels = [
 
 [[package]]
 name = "litestar-granian"
-version = "0.16.0-beta.1"
+version = "0.16.0-beta.2"
 source = { editable = "." }
 dependencies = [
     { name = "granian", extra = ["all"] },
