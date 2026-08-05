@@ -149,7 +149,7 @@ def test_placement_asgi_falls_back_with_reason(caplog: pytest.LogCaptureFixture)
 
     assert selection is None
     assert len(caplog.records) == 1
-    assert "SSR owns assets" in caplog.text
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
 
 
 def test_placement_asgi_without_reason_falls_back_cleanly(caplog: pytest.LogCaptureFixture) -> None:
@@ -170,7 +170,7 @@ def test_unknown_placement_falls_back(caplog: pytest.LogCaptureFixture) -> None:
 
     assert selection is None
     assert len(caplog.records) == 1
-    assert "sidecar" in caplog.text
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
 
 
 def test_legacy_config_without_placement_selects_native(tmp_path: Path) -> None:
@@ -197,7 +197,7 @@ def test_legacy_fallback_reason_still_honored(tmp_path: Path, caplog: pytest.Log
 
     assert selection is None
     assert len(caplog.records) == 1
-    assert "legacy owns assets" in caplog.text
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
 
 
 def test_native_placement_with_fallback_reason_still_falls_back(
@@ -218,7 +218,7 @@ def test_native_placement_with_fallback_reason_still_falls_back(
 
     assert selection is None
     assert len(caplog.records) == 1
-    assert "dual signal owns assets" in caplog.text
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
 
 
 class _RaisingProvider:
@@ -232,25 +232,20 @@ def test_provider_raising_unexpected_exception_degrades_to_fallback(caplog: pyte
 
     assert selection is None
     assert len(caplog.records) == 1
-    assert "boom" in caplog.text
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
 
 
-def test_fallback_reason_is_also_printed_to_console(capsys: pytest.CaptureFixture[str]) -> None:
-    config = _placement_config(_StaticPlacement.ASGI, reason="SSR owns assets")
-
-    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
-
-    assert selection is None
-    assert "SSR owns assets" in capsys.readouterr().out
-
-
-def test_fallback_console_output_respects_quiet_console_env_var(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_fallback_reason_is_logged_once_without_console_output(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("LITESTAR_QUIET_CONSOLE", "1")
     config = _placement_config(_StaticPlacement.ASGI, reason="SSR owns assets")
 
-    selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
+    with caplog.at_level(logging.INFO, logger="litestar_granian.static"):
+        selection = _resolve_static_mounts(_app(StaticProvider(config)), static_mode="auto")
 
     assert selection is None
-    assert capsys.readouterr().out == ""
+    assert [record.getMessage() for record in caplog.records] == ["Using Litestar for static files"]
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""

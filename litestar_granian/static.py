@@ -8,8 +8,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
-from litestar.cli._utils import console  # pyright: ignore[reportPrivateImportUsage]
-
 StaticMode = Literal["off", "auto"]
 
 logger = logging.getLogger("litestar_granian.static")
@@ -128,9 +126,6 @@ def _directory_has_entries(directory: Path) -> bool:
         return next(entries, None) is not None
 
 
-def _fallback(reason: str) -> _StaticMounts | None:
-    message = f"Granian native static serving unavailable; using Litestar fallback: {reason}"
-    logger.info("Granian native static serving unavailable; using Litestar fallback: %s", reason)
-    if not (os.getenv("LITESTAR_QUIET_CONSOLE") or False):
-        console.print(message, markup=False, soft_wrap=True)
+def _fallback(_reason: str) -> _StaticMounts | None:
+    logger.info("Using Litestar for static files")
     return None

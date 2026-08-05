@@ -206,6 +206,16 @@ pre-commit:                                        ## Run pre-commit hooks
 	@uv run pre-commit run --all-files
 	@echo "${OK} Pre-commit checks passed ✨"
 
+.PHONY: zizmor
+zizmor:                                            ## Run zizmor workflow security scanner
+	@echo "${INFO} Running zizmor workflow security checks... 🛡️"
+	@if [ -d ".github/workflows" ]; then \
+		uvx zizmor .github/workflows; \
+	else \
+		echo "${WARN} No .github/workflows directory found"; \
+	fi
+	@echo "${OK} zizmor workflow checks passed ✨"
+
 .PHONY: slotscheck
 slotscheck:                                        ## Run slotscheck
 	@echo "${INFO} Running slots check... 🔍"
@@ -213,7 +223,7 @@ slotscheck:                                        ## Run slotscheck
 	@echo "${OK} Slots check passed ✨"
 
 .PHONY: lint
-lint: pre-commit type-check slotscheck             ## Run all linting checks
+lint: pre-commit type-check slotscheck zizmor      ## Run all linting checks
 
 .PHONY: check-all
 check-all: lint test-all coverage                  ## Run all checks (lint, test, coverage)
