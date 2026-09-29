@@ -31,7 +31,7 @@ license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
 requires-python = ">=3.10"
-version = "0.16.0"
+version = "0.17.0"
 
 [project.urls]
 Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.rst"
@@ -306,6 +306,7 @@ ban-relative-imports = "all"
   "suppressible-exception",   # contextlib.suppress isn't always clearer in test teardown
   "literal-membership",  # set-literal-for-membership noise in small tuples
   "too-many-arguments",  # test fixtures/parametrize can grow arg lists
+  "pytest-fixture-autouse",
 ]
 
 
@@ -340,7 +341,7 @@ module = "tests.*"
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "0.16.0"
+current_version = "0.17.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
