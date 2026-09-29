@@ -50,8 +50,9 @@ install: destroy clean                              ## Install the project, depe
 	@echo "${OK} Installation complete! 🎉"
 
 .PHONY: destroy
-destroy:                                            ## Destroy the virtual environment
+destroy:                                            ## Destroy virtual environment and clean caches
 	@echo "${INFO} Destroying virtual environment... 🗑️"
+	@uvx prek clean >/dev/null 2>&1 || true
 	@rm -rf .venv
 	@echo "${OK} Virtual environment destroyed 🗑️"
 
@@ -64,8 +65,9 @@ upgrade:                                            ## Upgrade all dependencies 
 	@echo "${INFO} Updating all dependencies... 🔄"
 	@uv lock --upgrade
 	@echo "${OK} Dependencies updated 🔄"
-	@uv run pre-commit autoupdate
-	@echo "${OK} Updated Pre-commit hooks 🔄"
+	@uvx prek autoupdate --cooldown-days 7
+	@echo "${OK} Updated prek hooks (7-day cooldown) 🔄"
+	@uv lock >/dev/null 2>&1
 
 .PHONY: lock
 lock:                                              ## Rebuild lockfiles from scratch
@@ -200,11 +202,15 @@ type-check: mypy pyright                           ## Run all type checking
 # Linting and Formatting
 # -----------------------------------------------------------------------------
 
+.PHONY: prek
+prek:                                               ## Run prek hooks
+	@echo "${INFO} Running prek checks... 🔍"
+	@git ls-files --cached --others --exclude-standard -z | \
+		xargs -0 uvx prek run --show-diff-on-failure --color=always --files
+	@echo "${OK} prek checks passed ✨"
+
 .PHONY: pre-commit
-pre-commit:                                        ## Run pre-commit hooks
-	@echo "${INFO} Running pre-commit checks... 🔎"
-	@uv run pre-commit run --all-files
-	@echo "${OK} Pre-commit checks passed ✨"
+pre-commit: prek                                    ## Compatibility alias for prek
 
 .PHONY: zizmor
 zizmor:                                            ## Run zizmor workflow security scanner
@@ -223,7 +229,7 @@ slotscheck:                                        ## Run slotscheck
 	@echo "${OK} Slots check passed ✨"
 
 .PHONY: lint
-lint: pre-commit type-check slotscheck zizmor      ## Run all linting checks
+lint: prek type-check slotscheck zizmor             ## Run all linting checks
 
 .PHONY: check-all
 check-all: lint test-all coverage                  ## Run all checks (lint, test, coverage)
