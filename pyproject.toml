@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.19.0",
-  "granian[all]>=2.7.9",
+  "granian[all]>=2.8.3",
 ]
 description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
 keywords = ["litestar", "granian", "asgi", "asgi-server", "python", "web-server"]
@@ -42,9 +42,9 @@ Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["granian[rloop]>=2.7.9"]
-uvloop = ["granian[uvloop]>=2.7.9"]
-winloop = ["granian[winloop]>=2.7.9"]
+rloop = ["granian[rloop]>=2.8.3"]
+uvloop = ["granian[uvloop]>=2.8.3"]
+winloop = ["granian[winloop]>=2.8.3"]
 
 ######################
 # Build & Versioning #
@@ -84,7 +84,6 @@ dev = [
   "slotscheck",
   "pylint",
   "pyright",
-  "pre-commit",
   "types-setuptools",
   "types-click",
   "types-decorator",

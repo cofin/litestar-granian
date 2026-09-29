@@ -38,9 +38,16 @@ def test_help_exposes_only_truthful_compatibility_aliases() -> None:
     assert "--file-descriptor" in result.output
     assert "--in-subprocess" in result.output
     assert "--no-subprocess" in result.output
-    assert "--use-litestar-logger" in result.output
     logger_option = next(parameter for parameter in run_command.params if parameter.name == "use_litestar_logger")
     assert "--no-litestar-logger" in logger_option.secondary_opts
+    access_log_option = next(parameter for parameter in run_command.params if parameter.name == "log_access_enabled")
+    assert "--access-log" in access_log_option.opts
+    assert "--granian-access-log" in access_log_option.opts
+    assert "--no-access-log" in access_log_option.secondary_opts
+    assert "--granian-no-access-log" in access_log_option.secondary_opts
+    access_log_fmt_option = next(parameter for parameter in run_command.params if parameter.name == "log_access_fmt")
+    assert "--access-log-fmt" in access_log_fmt_option.opts
+    assert "--granian-access-log-fmt" in access_log_fmt_option.opts
 
 
 def test_help_descriptions_explain_litestar_and_granian_behavior() -> None:

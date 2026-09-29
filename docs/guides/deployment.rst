@@ -50,4 +50,24 @@ Environment files and working directories
 needed by Litestar server-lifespan integrations must already exist in the
 parent environment.
 
+Linux socket tuning for worker reloads
+======================================
+
+Granian 2.8+ binds independent per-worker listener sockets on Linux using
+``SO_REUSEPORT``. When a worker is stopped or respawned (such as via ``SIGHUP``,
+``--workers-lifetime``, or ``--respawn-failed-workers``), the Linux kernel
+requires kernel >= 5.14 and ``net.ipv4.tcp_migrate_req=1`` to migrate pending
+SYN/ACK connection requests from the closing listener socket to surviving worker
+sockets without dropping client connections:
+
+.. code-block:: shell
+
+    sysctl -w net.ipv4.tcp_migrate_req=1
+
+To persist across reboots, add to ``/etc/sysctl.d/99-granian.conf``:
+
+.. code-block:: ini
+
+    net.ipv4.tcp_migrate_req = 1
+
 For a complete option inventory, use :doc:`../reference/cli`.
