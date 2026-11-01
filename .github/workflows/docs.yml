@@ -29,7 +29,7 @@ jobs:
         run: uv python install 3.14
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --group doc
 
       - name: Build documentation
         run: make docs
@@ -37,7 +37,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: docs/_build/html
+          path: site
 
   deploy:
     needs: build

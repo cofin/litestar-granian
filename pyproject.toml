@@ -34,9 +34,9 @@ requires-python = ">=3.11"
 version = "0.17.0"
 
 [project.urls]
-Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.rst"
+Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.md"
 Discord = "https://discord.gg/X3FJqy8d2j"
-Documentation = "https://github.com/cofin/litestar-granian/tree/main/docs"
+Documentation = "https://cofin.github.io/litestar-granian/"
 Issue = "https://github.com/cofin/litestar-granian/issues/"
 Source = "https://github.com/cofin/litestar-granian"
 
@@ -71,13 +71,6 @@ default-groups = ["dev"]
 dev = [
   # - Release
   "bump-my-version",
-  # - Documentation
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=5.0.1",
-  "sphinx-design>=0.5.0",
-  "shibuya",
   # - Linting
   "mypy",
   "ruff",
@@ -88,7 +81,6 @@ dev = [
   "types-click",
   "types-decorator",
   "types-pyyaml",
-  "types-docutils",
   "types-Pygments",
   "types-Pillow",
   "types-colorama",
@@ -96,6 +88,7 @@ dev = [
   # - Testing
   "structlog>=26.1.0",
   "anyio",
+  "websockets",
   "coverage[toml]",
   "pytest",
   "pytest-timeout",
@@ -104,6 +97,12 @@ dev = [
   "pytest-sugar",
   "pytest-click",
   "pytest-xdist",
+]
+doc = [
+  "zensical>=0.0.71",
+  "mkdocstrings-python>=2.0.1",
+  "pymdown-extensions>=10.16",
+  "ruff>=0.15.0",
 ]
 benchmark = [
   "httpx[http2]",
@@ -264,11 +263,14 @@ preview = true                                                    # preview feat
 src = ["litestar_granian","tools","example", "tests/", "docs/"]
 target-version = "py311"
 
+[tool.ruff.format]
+exclude = ["*.md"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["litestar_granian", "tests"]
+known-first-party = ["litestar_granian", "tests", "tools"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -329,7 +331,7 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 warn_unused_ignores = true
-packages = "litestar_granian,tests,docs"
+packages = "litestar_granian,tests,tools.docs"
 
 [[tool.mypy.overrides]]
 disable_error_code = "attr-defined"

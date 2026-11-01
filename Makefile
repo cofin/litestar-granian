@@ -239,30 +239,52 @@ check-all: lint test-all coverage                  ## Run all checks (lint, test
 # =============================================================================
 
 .PHONY: docs-clean
-docs-clean:                                        ## Clean documentation build
+docs-clean:                                        ## Remove built documentation and Zensical cache
 	@echo "${INFO} Cleaning documentation build assets... 🧹"
-	@rm -rf docs/_build
+	@rm -rf site .cache docs/_build
 	@echo "${OK} Documentation assets cleaned"
 
-.PHONY: docs-serve
-docs-serve: docs-clean                             ## Serve documentation locally
-	@echo "${INFO} Starting documentation server... 📚"
-	@uv run sphinx-autobuild docs docs/_build/ -j 1 --watch litestar_granian --watch docs --watch tests --watch CONTRIBUTING.rst --port 8002
-
 .PHONY: docs
-docs: docs-clean                                   ## Build documentation
-	@echo "${INFO} Building documentation... 📝"
-	@PYTHONWARNINGS="ignore::FutureWarning" uv run sphinx-build -M html docs docs/_build/ -E -a -j 1 -W
-	@echo "${OK} Documentation built successfully"
+docs: docs-clean                                   ## Build and verify Zensical documentation
+	@echo "${INFO} Building documentation (Zensical)... 📝"
+	@uv run --no-sync python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts litestar_granian
+	@uv run --no-sync python -m tools.docs.generate_cli_docs --check
+	@uv run --no-sync zensical build --clean
+	@uv run --no-sync python -m tools.docs.postbuild --site-dir site --docs-dir docs --zensical-config zensical.toml
+	@uv run --no-sync python -m tools.docs.verify_docs_artifacts --site-dir site
+	@echo "${OK} Documentation built and verified in site/"
 
-.PHONY: docs-linkcheck
-docs-linkcheck:                                    ## Check documentation links
-	@echo "${INFO} Checking documentation links... 🔗"
-	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -W
-	@echo "${OK} Link check complete"
+.PHONY: docs-serve
+docs-serve: docs                                   ## Build and serve documentation locally
+	@echo "${INFO} Starting documentation server... 📚"
+	@uv run --no-sync zensical serve --dev-addr 127.0.0.1:8000
 
-.PHONY: docs-linkcheck-full
-docs-linkcheck-full:                               ## Run full documentation link check
-	@echo "${INFO} Running full link check... 🔗"
-	@uv run sphinx-build -b linkcheck ./docs ./docs/_build -W -D linkcheck_anchors=0
-	@echo "${OK} Full link check complete"
+.PHONY: docs-check
+docs-check: docs                                   ## Build docs and verify live zensical serve HTTP 200
+	@echo "${INFO} Verifying zensical serve..."
+	@set -euo pipefail; \
+	server_log="$$(mktemp)"; \
+	server_pid=""; \
+	cleanup() { \
+		if [ -n "$$server_pid" ] && kill -0 "$$server_pid" 2>/dev/null; then \
+			kill "$$server_pid" 2>/dev/null || true; \
+			wait "$$server_pid" 2>/dev/null || true; \
+		fi; \
+		rm -f "$$server_log"; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	uv run --no-sync zensical serve --dev-addr 127.0.0.1:8000 >"$$server_log" 2>&1 & \
+	server_pid="$$!"; \
+	for _ in $$(seq 1 50); do \
+		if curl --silent --show-error --fail http://127.0.0.1:8000/ >/dev/null 2>&1 || curl --silent --show-error --fail http://127.0.0.1:8000/litestar-granian/ >/dev/null 2>&1; then \
+			echo "${OK} Docs server responded with HTTP 200"; \
+			exit 0; \
+		fi; \
+		if ! kill -0 "$$server_pid" 2>/dev/null; then \
+			cat "$$server_log" >&2; \
+			exit 1; \
+		fi; \
+		sleep 0.2; \
+	done; \
+	cat "$$server_log" >&2; \
+	exit 1

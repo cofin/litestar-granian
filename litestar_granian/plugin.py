@@ -31,6 +31,7 @@ class GranianPlugin(InitPlugin, CLIPluginProtocol):
     __slots__ = ("static",)
 
     static: StaticMode
+    """Configured native static-file discovery mode (``"off"`` or ``"auto"``)."""
 
     def __init__(
         self,
