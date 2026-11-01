@@ -11,15 +11,15 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 import psutil  # pyright: ignore[reportMissingModuleSource]
-import tomllib
 from h2.connection import H2Connection  # pyright: ignore[reportMissingImports]
 from h2.events import DataReceived, ResponseReceived, StreamEnded  # pyright: ignore[reportMissingImports]
 from websockets.sync.client import connect
@@ -403,7 +403,7 @@ def main() -> None:
     except OSError as exc:
         message = f"evidence directory is not writable: {args.output_dir}"
         raise PermissionError(message) from exc
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     evidence_path = args.output_dir / f"{timestamp}.json"
     pythons = args.pythons or ["3.14", "3.14t"]
     loops = args.loops or _default_loops()

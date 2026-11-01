@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -127,7 +127,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13", "3.14", "3.14t"]
+        python-version: ["3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -156,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"]
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -191,10 +191,18 @@ jobs:
           - {os: ubuntu-latest, python-version: "3.14t", loop: rloop, sync-args: "--extra rloop"}
           - {os: ubuntu-latest, python-version: "3.14", loop: uvloop, sync-args: "--extra uvloop"}
           - {os: ubuntu-latest, python-version: "3.14t", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: ubuntu-latest, python-version: "3.15t", loop: asyncio, sync-args: ""}
+          - {os: ubuntu-latest, python-version: "3.15t", loop: rloop, sync-args: "--extra rloop"}
+          - {os: ubuntu-latest, python-version: "3.15", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: ubuntu-latest, python-version: "3.15t", loop: uvloop, sync-args: "--extra uvloop"}
           - {os: macos-latest, python-version: "3.14t", loop: asyncio, sync-args: ""}
           - {os: macos-latest, python-version: "3.14t", loop: rloop, sync-args: "--extra rloop"}
           - {os: macos-latest, python-version: "3.14", loop: uvloop, sync-args: "--extra uvloop"}
           - {os: macos-latest, python-version: "3.14t", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: macos-latest, python-version: "3.15t", loop: asyncio, sync-args: ""}
+          - {os: macos-latest, python-version: "3.15t", loop: rloop, sync-args: "--extra rloop"}
+          - {os: macos-latest, python-version: "3.15", loop: uvloop, sync-args: "--extra uvloop"}
+          - {os: macos-latest, python-version: "3.15t", loop: uvloop, sync-args: "--extra uvloop"}
     timeout-minutes: 15
     steps:
       - name: Check out repository

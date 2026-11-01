@@ -5,7 +5,7 @@ Compatibility
 Package requirements
 ====================
 
-``litestar-granian`` requires Python 3.10 or later, Litestar 2.19 or later, and
+``litestar-granian`` requires Python 3.11 or later, Litestar 2.19 or later, and
 Granian 2.8.5 or later. Its public runtime API is:
 
 - :class:`litestar_granian.GranianPlugin`;

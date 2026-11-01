@@ -20,6 +20,9 @@ Added
 Changed
 -------
 
+- Dropped Python 3.10 support (``requires-python = ">=3.11"``) and added Python
+  3.15 and 3.15t (free-threaded) support and CI coverage (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
 - Updated minimum Granian requirement to ``granian[all]>=2.8.5`` (and the
   ``rloop``, ``uvloop``, and ``winloop`` extras to ``>=2.8.5``), adopting
   Granian 2.8's per-worker ``SO_REUSEPORT`` TCP listener sockets on Linux,

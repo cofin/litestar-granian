@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -12,7 +12,7 @@ import pytest
 from litestar_granian.static import _resolve_static_mounts
 
 
-class _StaticPlacement(str, Enum):
+class _StaticPlacement(StrEnum):
     """Mirror the provider's str-Enum discriminator so ``==`` comparison is exercised."""
 
     NATIVE = "native"
