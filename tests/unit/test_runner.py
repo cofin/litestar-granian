@@ -40,7 +40,7 @@ def test_probe_fails_when_entrypoint_is_missing() -> None:
     message = str(exc_info.value)
     assert "granian.cli.entrypoint is missing" in message
     assert version("granian") in message
-    assert "granian==2.7.*" in message
+    assert "granian==2.8.*" in message
     assert "--fd/--reload-include/--reload-exclude" in message
 
 

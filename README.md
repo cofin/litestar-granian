@@ -85,15 +85,15 @@ On supported platforms, use the matching `rloop` or `winloop` extra and pass
 
 ## Next steps
 
-- [Quickstart](docs/getting-started/quickstart.rst) — repeat the first run and
+- [Quickstart](docs/getting-started/quickstart.md) — repeat the first run and
   learn what to check.
-- [Configuration](docs/guides/configuration.rst) — choose bindings, workers,
+- [Configuration](docs/guides/configuration.md) — choose bindings, workers,
   protocols, TLS, reload, and event loops.
-- [Logging and metrics](docs/guides/logging-and-metrics.rst) — see how Granian
+- [Logging and metrics](docs/guides/logging-and-metrics.md) — see how Granian
   automatically matches Litestar's formatter or accepts a complete override.
-- [Deployment](docs/guides/deployment.rst) — forward signals and verify clean
+- [Deployment](docs/guides/deployment.md) — forward signals and verify clean
   shutdown.
-- [CLI reference](docs/reference/cli.rst) — browse every option and environment
+- [CLI reference](docs/reference/cli.md) — browse every option and environment
   variable.
 
 ## License

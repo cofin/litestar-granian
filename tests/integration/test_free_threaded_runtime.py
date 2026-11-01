@@ -383,9 +383,7 @@ def test_ten_start_request_stop_cycles_leave_no_runtime_artifacts(
         assert not list(server.temporary_directory.glob("litestar-granian-*.json"))
 
 
-@pytest.mark.upstream
 @pytest.mark.timeout(30)
-@pytest.mark.xfail(reason="Granian #881: repeated free-threaded metrics lifecycle can panic", strict=False)
 def test_granian_881_repeated_metrics_lifecycle_diagnostic(
     create_app_file: CreateAppFileFixture,
     tmp_project_dir: Path,
@@ -410,10 +408,8 @@ def test_granian_881_repeated_metrics_lifecycle_diagnostic(
     assert "panicked at" not in output, output
 
 
-@pytest.mark.upstream
 @pytest.mark.timeout(30)
 @pytest.mark.parametrize("runtime_mode", ["mt", "st"])
-@pytest.mark.xfail(reason="Granian #884: free-threaded WebSocket teardown can panic", strict=False)
 def test_granian_884_websocket_teardown_diagnostic(
     create_app_file: CreateAppFileFixture,
     tmp_project_dir: Path,

@@ -614,3 +614,32 @@ def test_ssl_certfile_compatibility_alias_is_forwarded(
     assert result.exit_code == 0, result.output
     argv = run_supervised.call_args.args[1].argv
     assert f"--ssl-certificate={cert.resolve()}" in argv
+
+
+@pytest.mark.parametrize(
+    ("flag", "fmt_flag"),
+    [
+        ("--access-log", "--access-log-fmt"),
+        ("--granian-access-log", "--granian-access-log-fmt"),
+    ],
+)
+def test_access_log_aliases_are_forwarded(
+    runner: CliRunner,
+    root_command: LitestarGroup,
+    app_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flag: str,
+    fmt_flag: str,
+) -> None:
+    run_supervised = MagicMock(return_value=0)
+    monkeypatch.setattr(cli, "_run_supervised", run_supervised)
+
+    result = runner.invoke(
+        root_command,
+        ["--app", f"{app_file.stem}:app", "run", flag, fmt_flag, "[%(time)s] %(message)s"],
+    )
+
+    assert result.exit_code == 0, result.output
+    argv = run_supervised.call_args.args[1].argv
+    assert "--access-log" in argv
+    assert "--access-log-fmt=[%(time)s] %(message)s" in argv

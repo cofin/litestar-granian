@@ -1,0 +1,25 @@
+{#- Compact 3-column Attributes table without redundant autoref span wrappers on attribute names. -#}
+{% import "language.html.jinja" as lang with context %}
+{% set ns = namespace(items=[]) %}
+{% for attribute in section.value %}
+  {% if attribute.annotation or attribute.description %}
+    {% set ns.items = ns.items + [attribute] %}
+  {% endif %}
+{% endfor %}
+{% if ns.items %}
+<p><span class="doc-section-title">{{ section.title or lang.t("Attributes:") }}</span></p>
+<table>
+  <thead>
+    <tr>
+      <th>{{ lang.t("Name") }}</th>
+      <th>{{ lang.t("Type") }}</th>
+      <th>{{ lang.t("Description") }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for attribute in ns.items %}
+      <tr class="doc-section-item"><td><code>{{ attribute.name }}</code></td><td>{% if attribute.annotation %}<code>{{ attribute.annotation|string|e }}</code>{% endif %}</td><td><div class="doc-md-description">{% if attribute.description %}{{ attribute.description|convert_markdown(heading_level, html_id, autoref_hook=autoref_hook|default(AutorefsHook(obj[attribute.name], config))) }}{% elif attribute.name in obj.members and obj.members[attribute.name].value and "field(" not in (obj.members[attribute.name].value|string) %}Default: <code>{{ obj.members[attribute.name].value }}</code>{% endif %}</div></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

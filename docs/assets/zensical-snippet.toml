@@ -1,0 +1,9 @@
+[project]
+site_name = "Litestar Granian"
+site_description = "High-Performance Rust HTTP/ASGI Server Plugin"
+extra_css = ["stylesheets/extra.css"]
+
+[project.theme]
+variant = "modern"
+logo = "assets/logo.svg"
+favicon = "assets/favicon.svg"

@@ -10,11 +10,11 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -23,28 +23,28 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.19.0",
-  "granian[all]>=2.7.9",
+  "granian[all]>=2.8.5",
 ]
 description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
 keywords = ["litestar", "granian", "asgi", "asgi-server", "python", "web-server"]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
-requires-python = ">=3.10"
-version = "0.16.0"
+requires-python = ">=3.11"
+version = "0.17.0"
 
 [project.urls]
-Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.rst"
+Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.md"
 Discord = "https://discord.gg/X3FJqy8d2j"
-Documentation = "https://github.com/cofin/litestar-granian/tree/main/docs"
+Documentation = "https://cofin.github.io/litestar-granian/"
 Issue = "https://github.com/cofin/litestar-granian/issues/"
 Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["granian[rloop]>=2.7.9"]
-uvloop = ["granian[uvloop]>=2.7.9"]
-winloop = ["granian[winloop]>=2.7.9"]
+rloop = ["granian[rloop]>=2.8.5"]
+uvloop = ["granian[uvloop]>=2.8.5"]
+winloop = ["granian[winloop]>=2.8.5"]
 
 ######################
 # Build & Versioning #
@@ -71,25 +71,16 @@ default-groups = ["dev"]
 dev = [
   # - Release
   "bump-my-version",
-  # - Documentation
-  "sphinx>=7.1.2",
-  "sphinx-autobuild>=2021.3.14",
-  "sphinx-copybutton>=0.5.2",
-  "sphinx-click>=5.0.1",
-  "sphinx-design>=0.5.0",
-  "shibuya",
   # - Linting
   "mypy",
   "ruff",
   "slotscheck",
   "pylint",
   "pyright",
-  "pre-commit",
   "types-setuptools",
   "types-click",
   "types-decorator",
   "types-pyyaml",
-  "types-docutils",
   "types-Pygments",
   "types-Pillow",
   "types-colorama",
@@ -97,6 +88,7 @@ dev = [
   # - Testing
   "structlog>=26.1.0",
   "anyio",
+  "websockets",
   "coverage[toml]",
   "pytest",
   "pytest-timeout",
@@ -105,6 +97,12 @@ dev = [
   "pytest-sugar",
   "pytest-click",
   "pytest-xdist",
+]
+doc = [
+  "zensical>=0.0.71",
+  "mkdocstrings-python>=2.0.1",
+  "pymdown-extensions>=10.16",
+  "ruff>=0.15.0",
 ]
 benchmark = [
   "httpx[http2]",
@@ -189,7 +187,6 @@ exclude = [
   '__pycache__',
 ]
 fix = true
-include = ["litestar_granian/**/*.py", "litestar_granian/**/*.pyi", "tests/**/*.py", "tests/**/*.pyi","docs/**/*","examples/**/*"]
 line-length = 120
 lint.fixable = ["ALL"]
 lint.ignore = [
@@ -264,13 +261,16 @@ lint.select = ["ALL"]
 lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 preview = true                                                    # preview features & checks, use with caution
 src = ["litestar_granian","tools","example", "tests/", "docs/"]
-target-version = "py310"
+target-version = "py311"
+
+[tool.ruff.format]
+exclude = ["*.md"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["litestar_granian", "tests"]
+known-first-party = ["litestar_granian", "tests", "tools"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -307,6 +307,7 @@ ban-relative-imports = "all"
   "suppressible-exception",   # contextlib.suppress isn't always clearer in test teardown
   "literal-membership",  # set-literal-for-membership noise in small tuples
   "too-many-arguments",  # test fixtures/parametrize can grow arg lists
+  "pytest-fixture-autouse",
 ]
 
 
@@ -330,7 +331,7 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 warn_unused_ignores = true
-packages = "litestar_granian,tests,docs"
+packages = "litestar_granian,tests,tools.docs"
 
 [[tool.mypy.overrides]]
 disable_error_code = "attr-defined"
@@ -341,7 +342,7 @@ module = "tests.*"
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "0.16.0"
+current_version = "0.17.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"

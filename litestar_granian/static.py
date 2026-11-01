@@ -13,7 +13,7 @@ StaticMode = Literal["off", "auto"]
 logger = logging.getLogger("litestar_granian.static")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _StaticMounts:
     routes: tuple[str, ...]
     mounts: tuple[Path, ...]

@@ -59,7 +59,9 @@ _GRANIAN_ENV_OVERRIDES = {
     "--granian-log": "GRANIAN_LOG_ENABLED",
     "--granian-log-level": "GRANIAN_LOG_LEVEL",
     "--granian-access-log": "GRANIAN_LOG_ACCESS_ENABLED",
+    "--access-log": "GRANIAN_LOG_ACCESS_ENABLED",
     "--granian-access-log-fmt": "GRANIAN_LOG_ACCESS_FMT",
+    "--access-log-fmt": "GRANIAN_LOG_ACCESS_FMT",
     "--ssl-certfile": "GRANIAN_SSL_CERTIFICATE",
     "--unix-domain-socket": "GRANIAN_UDS",
     "--reload-dir": "GRANIAN_RELOAD_PATHS",
@@ -244,7 +246,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
     "--backlog",
     type=IntRange(128),
     default=1024,
-    help="Maximum number of connections to hold in backlog (globally)",
+    help="Maximum number of connections to hold in backlog",
 )
 @option(
     "--backpressure",
@@ -339,11 +341,17 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
 )
 @option(
     "--granian-access-log/--granian-no-access-log",
+    "--access-log/--no-access-log",
     "log_access_enabled",
     default=False,
     help="Enable access log",
 )
-@option("--granian-access-log-fmt", "log_access_fmt", help="Access log format")
+@option(
+    "--granian-access-log-fmt",
+    "--access-log-fmt",
+    "log_access_fmt",
+    help="Access log format",
+)
 @option("--ssl-keyfile-password", help="SSL key password")
 @option(
     "--ssl-protocol-min",

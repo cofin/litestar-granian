@@ -12,16 +12,18 @@ repos:
       - id: check-ast
       - id: check-case-conflict
       - id: check-toml
+      - id: check-yaml
       - id: debug-statements
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: trailing-whitespace
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.16.1"
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.17.2"
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: ["--fix"]
       - id: ruff-format
+        types_or: [python, pyi, jupyter]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
@@ -35,11 +37,7 @@ repos:
         exclude: "test*|tools|docs"
         args: ["--use-tuple"]
   - repo: https://github.com/ariebovenberg/slotscheck
-    rev: v0.20.1
+    rev: v0.21.0
     hooks:
       - id: slotscheck
-        exclude: "docs|.github"
-  - repo: https://github.com/sphinx-contrib/sphinx-lint
-    rev: "v1.0.2"
-    hooks:
-      - id: sphinx-lint
+        exclude: "docs|tools|.github"

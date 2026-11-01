@@ -4,7 +4,7 @@ import os
 import signal
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -36,7 +36,7 @@ def test_supervised_runtime_keeps_handlers_and_app_env_through_lifespan_exit(
             installed = False
 
     @contextmanager
-    def lifespan(_app: object) -> Iterator[None]:
+    def lifespan(_app: object) -> Generator[None, None, None]:
         events.append((
             "enter",
             os.environ.get("LITESTAR_APP"),
@@ -89,7 +89,7 @@ def test_termination_signal_during_lifespan_teardown_after_child_exit(monkeypatc
     process.poll.return_value = 0
 
     @contextmanager
-    def lifespan(_app: object) -> Iterator[None]:
+    def lifespan(_app: object) -> Generator[None, None, None]:
         try:
             yield
         finally:
@@ -111,7 +111,7 @@ def test_termination_signal_during_lifespan_teardown_after_child_exit(monkeypatc
 
 def test_supervised_runtime_restores_state_after_child_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     @contextmanager
-    def lifespan(_app: object) -> Iterator[None]:
+    def lifespan(_app: object) -> Generator[None, None, None]:
         yield
 
     supervisor = MagicMock()
@@ -141,7 +141,7 @@ def test_supervised_runtime_removes_generated_log_config(
     tmp_path: Path,
 ) -> None:
     @contextmanager
-    def lifespan(_app: object) -> Iterator[None]:
+    def lifespan(_app: object) -> Generator[None, None, None]:
         yield
 
     config_path = tmp_path / "generated-log-config.json"
