@@ -19,7 +19,8 @@ Deprecated compatibility options
       - Deprecated no-op; Granian now matches Litestar's formatter
         automatically. Use ``--log-config`` for a complete override.
 
-The deprecated switches warn when used and are planned for removal in v0.17.
+The deprecated switches warn when used, are retained as deprecated no-ops in
+v0.17, and are planned for removal in v0.18.
 
 Retained Litestar aliases
 =========================

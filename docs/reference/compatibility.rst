@@ -6,7 +6,7 @@ Package requirements
 ====================
 
 ``litestar-granian`` requires Python 3.10 or later, Litestar 2.19 or later, and
-Granian 2.7.9 or later. Its public runtime API is:
+Granian 2.8.5 or later. Its public runtime API is:
 
 - :class:`litestar_granian.GranianPlugin`;
 - :data:`litestar_granian.__project__`;
@@ -32,6 +32,10 @@ Granian-native option names to the child.
       - ``--ssl-certificate``
     * - ``--reload-dir``
       - ``--reload-paths``
+    * - ``--access-log`` / ``--no-access-log``
+      - ``--granian-access-log`` / ``--granian-no-access-log``
+    * - ``--access-log-fmt``
+      - ``--granian-access-log-fmt``
 
 Environment precedence
 ======================

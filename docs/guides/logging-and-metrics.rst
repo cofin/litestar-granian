@@ -71,8 +71,11 @@ Run it with:
     litestar --app docs.examples.app:app run --log-config docs/examples/logging.json
 
 Granian logging and access logging remain separate. Use
-``--granian-no-log`` to disable server logs and ``--granian-access-log`` to
-enable request logs.
+``--granian-no-log`` to disable server logs and ``--access-log`` (or
+``--granian-access-log``) to enable request logs. ``--access-log-fmt`` (or
+``--granian-access-log-fmt``) customizes the access log format string,
+including Granian 2.8+'s ``%(header{...})s`` request header atom (for example,
+``%(header{x-forwarded-for})s``).
 
 The retained ``--use-litestar-logger`` and ``--no-litestar-logger`` switches
 are deprecated no-ops. They warn that matching is automatic.

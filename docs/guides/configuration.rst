@@ -29,8 +29,8 @@ Workers, runtime, and event loops
 - ``--runtime-threads`` selects Rust network-I/O threads per worker.
 - ``--runtime-mode`` selects Granian's Rust runtime mode.
 - ``--loop`` selects the event-loop implementation.
-- ``--backlog`` limits queued connections globally.
-- ``--backpressure`` limits concurrent requests per worker.
+- ``--backlog`` limits queued connections on the listening socket (per worker on Linux TCP sockets; shared across workers on UDS, Windows, and macOS).
+- ``--backpressure`` limits concurrent requests per worker. Size ``--backpressure`` to stay within your per-worker database connection pool limit (for example, ``pool_size + max_overflow``) so queued requests wait at Granian's edge rather than exhausting pool connections inside the application.
 
 The default installation includes no optional event loop. Install one
 integration and select it explicitly when validating it:

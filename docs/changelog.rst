@@ -6,6 +6,54 @@ All commits to this project will be documented in this file.
 
 Litestar Granian Changelog
 
+0.17.0
+======
+
+Added
+-----
+
+- Added ``--access-log``/``--no-access-log`` and ``--access-log-fmt`` CLI
+  aliases for ``--granian-access-log``/``--granian-no-access-log`` and
+  ``--granian-access-log-fmt`` (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
+
+Changed
+-------
+
+- Updated minimum Granian requirement to ``granian[all]>=2.8.5`` (and the
+  ``rloop``, ``uvloop``, and ``winloop`` extras to ``>=2.8.5``), adopting
+  Granian 2.8's per-worker ``SO_REUSEPORT`` TCP listener sockets on Linux,
+  ``%(header{...})s`` access log format atoms, and upstream free-threaded
+  Python (``3.14t``) lifecycle fixes (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
+- Updated ``--backlog`` CLI help text and configuration guidance to reflect
+  Granian 2.8's per-socket backlog semantics and documented ``--backpressure``
+  sizing relative to per-worker database connection pools (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
+- Retained ``--in-subprocess``/``--no-subprocess`` and
+  ``--use-litestar-logger``/``--no-litestar-logger`` as deprecated no-op
+  compatibility switches for 0.17.0, planned for removal in 0.18 (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
+- Added ``slots=True`` to ``_GranianCommand`` and ``_StaticMounts`` (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_).
+- Bumped ``actions/checkout`` to ``v6.0.2``, ``actions/setup-python`` to
+  ``v6.2.0``, ``actions/upload-pages-artifact`` to ``v4.0.0``,
+  ``astral-sh/setup-uv`` to ``v10.3.2``, and ``pypa/gh-action-pypi-publish`` to
+  ``v1.14.3`` across GitHub Actions workflows (`#82
+  <https://github.com/cofin/litestar-granian/pull/82>`_, `#84
+  <https://github.com/cofin/litestar-granian/pull/84>`_, `#85
+  <https://github.com/cofin/litestar-granian/pull/85>`_).
+
+Fixed
+-----
+
+- Promoted the free-threaded Python (``3.14t``) repeated metrics lifecycle
+  (`#881 <https://github.com/emmett-framework/granian/issues/881>`_) and
+  WebSocket teardown (`#884
+  <https://github.com/emmett-framework/granian/issues/884>`_) diagnostics to
+  standard integration regressions now that both upstream defects are fixed in
+  Granian 2.8.5 (`#82 <https://github.com/cofin/litestar-granian/pull/82>`_).
+
 0.16.0
 ======
 

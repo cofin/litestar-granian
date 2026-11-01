@@ -128,7 +128,7 @@ def _probe_granian_compatibility(granian_cli: Any) -> None:
         message = (
             "litestar-granian's Granian compatibility shim does not match installed "
             f"granian {_granian_version()}: {'; '.join(problems)}. "
-            "Pin granian==2.7.* or drop --fd/--reload-include/--reload-exclude."
+            "Pin granian==2.8.* or drop --fd/--reload-include/--reload-exclude."
         )
         raise SystemExit(message)
 

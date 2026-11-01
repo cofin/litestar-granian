@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from litestar.cli._utils import LitestarEnv
 
 
-@dataclass
+@dataclass(slots=True)
 class _GranianCommand:
     argv: list[str]
     temporary_files: tuple[Path, ...] = ()

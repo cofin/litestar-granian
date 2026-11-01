@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "litestar>=2.19.0",
-  "granian[all]>=2.8.3",
+  "granian[all]>=2.8.5",
 ]
 description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
 keywords = ["litestar", "granian", "asgi", "asgi-server", "python", "web-server"]
@@ -42,9 +42,9 @@ Source = "https://github.com/cofin/litestar-granian"
 
 
 [project.optional-dependencies]
-rloop = ["granian[rloop]>=2.8.3"]
-uvloop = ["granian[uvloop]>=2.8.3"]
-winloop = ["granian[winloop]>=2.8.3"]
+rloop = ["granian[rloop]>=2.8.5"]
+uvloop = ["granian[uvloop]>=2.8.5"]
+winloop = ["granian[winloop]>=2.8.5"]
 
 ######################
 # Build & Versioning #
@@ -188,7 +188,6 @@ exclude = [
   '__pycache__',
 ]
 fix = true
-include = ["litestar_granian/**/*.py", "litestar_granian/**/*.pyi", "tests/**/*.py", "tests/**/*.pyi","docs/**/*","examples/**/*"]
 line-length = 120
 lint.fixable = ["ALL"]
 lint.ignore = [

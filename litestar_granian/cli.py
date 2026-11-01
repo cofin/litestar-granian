@@ -246,7 +246,7 @@ def option(*param_decls: str, cls: type[Option] | None = None, **attrs: Any) -> 
     "--backlog",
     type=IntRange(128),
     default=1024,
-    help="Maximum number of connections to hold in backlog (globally)",
+    help="Maximum number of connections to hold in backlog",
 )
 @option(
     "--backpressure",
