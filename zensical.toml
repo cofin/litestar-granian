@@ -1,6 +1,6 @@
 [project]
 site_name = "Litestar Granian"
-site_description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
+site_description = "Granian HTTP and WebSocket server plugin for Litestar applications."
 site_url = "https://cofin.github.io/litestar-granian/"
 repo_url = "https://github.com/cofin/litestar-granian"
 repo_name = "cofin/litestar-granian"

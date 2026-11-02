@@ -25,8 +25,19 @@ dependencies = [
   "litestar>=2.19.0",
   "granian[all]>=2.8.5",
 ]
-description = "Run Litestar applications with Granian while preserving Litestar startup, shutdown, logging, and server integrations."
-keywords = ["litestar", "granian", "asgi", "asgi-server", "python", "web-server"]
+description = "Granian HTTP and WebSocket server plugin for Litestar applications."
+keywords = [
+  "asgi",
+  "asgi-server",
+  "granian",
+  "http2",
+  "litestar",
+  "litestar-plugin",
+  "python",
+  "rust",
+  "web-server",
+  "websockets",
+]
 license = { text = "MIT" }
 name = "litestar-granian"
 readme = "README.md"
@@ -34,10 +45,11 @@ requires-python = ">=3.11"
 version = "0.17.0"
 
 [project.urls]
-Changelog = "https://github.com/cofin/litestar-granian/blob/main/docs/changelog.md"
+Changelog = "https://cofin.github.io/litestar-granian/changelog/"
 Discord = "https://discord.gg/X3FJqy8d2j"
 Documentation = "https://cofin.github.io/litestar-granian/"
-Issue = "https://github.com/cofin/litestar-granian/issues/"
+Homepage = "https://cofin.github.io/litestar-granian/"
+Issues = "https://github.com/cofin/litestar-granian/issues"
 Source = "https://github.com/cofin/litestar-granian"
 
 
