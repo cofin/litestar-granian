@@ -175,13 +175,13 @@ def test_explicit_loop_serves_http_websocket_and_reaps_descendants(
             os.kill(process.pid, signal.SIGINT)
         output = finish_process(process, timeout=12)
         wait_for_port(port, process, open_=False)
+        wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
+        assert "ModuleNotFoundError" not in output
+        assert "ImportError" not in output
+        assert "unsupported loop" not in output.lower()
 
         if sys.platform == "win32" and process.returncode == 1:
             pytest.xfail("Granian on Windows reports exit status 1 after CTRL_BREAK worker teardown")
         assert process.returncode == 0, output
-        assert "ModuleNotFoundError" not in output
-        assert "ImportError" not in output
-        assert "unsupported loop" not in output.lower()
-        wait_for_descendants_to_exit(descendant_pids, parent_pid=process.pid)
     finally:
         terminate_process_group(process)

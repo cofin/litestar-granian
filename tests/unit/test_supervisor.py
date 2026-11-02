@@ -15,6 +15,7 @@ from litestar_granian.supervisor import (
     _map_exit_code,
     _SignalForwarder,
 )
+from tests.integration import _runtime as runtime_helpers
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="exercises the POSIX supervisor path")
 
@@ -366,3 +367,108 @@ def test_signal_forwarder_restores_handlers_that_python_did_not_install(monkeypa
 )
 def test_exit_code_mapping(returncode: int, expected: int) -> None:
     assert _map_exit_code(returncode) == expected
+
+
+def test_windows_descendants_ignores_preexisting_processes_after_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    csv_output = (
+        '"ProcessId","ParentProcessId","CreationTicks"\n'
+        '"0","0",""\n'
+        '"4","0","100"\n'
+        '"2112","5120","1000"\n'
+        '"6960","2112","850"\n'
+        '"7008","2112","860"\n'
+        '"7056","2112","870"\n'
+        '"7080","2112","880"\n'
+        '"4472","2112","1000"\n'
+        '"6556","4472","1001"\n'
+        '"6948","6556","1002"\n'
+        '"7104","6948","1003"\n'
+        '"8000","6948","950"'
+    )
+    monkeypatch.setattr(runtime_helpers.sys, "platform", "win32")
+    monkeypatch.setattr(runtime_helpers, "_WINDOWS_CREATION_TICKS", {})
+    monkeypatch.setattr(
+        runtime_helpers.shutil,
+        "which",
+        MagicMock(return_value=r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
+    )
+    monkeypatch.setattr(
+        runtime_helpers.subprocess,
+        "check_output",
+        MagicMock(return_value=csv_output),
+    )
+
+    found = runtime_helpers.descendants(2112)
+
+    assert found == {4472, 6556, 6948, 7104}
+    assert runtime_helpers._WINDOWS_CREATION_TICKS == {
+        2112: 1000,
+        4472: 1000,
+        6556: 1001,
+        6948: 1002,
+        7104: 1003,
+    }
+
+
+def test_windows_wait_for_descendants_to_exit_handles_recycled_pids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initial_csv = (
+        '"ProcessId","ParentProcessId","CreationTicks"\n'
+        '"2112","5120","1000"\n'
+        '"4472","2112","1001"\n'
+        '"6556","4472","1002"'
+    )
+    mid_teardown_csv = (
+        '"ProcessId","ParentProcessId","CreationTicks"\n'
+        '"2112","800","2000"\n'
+        '"9000","2112","2001"\n'
+        '"4472","800","2002"\n'
+        '"6556","4472","1002"'
+    )
+    final_csv = (
+        '"ProcessId","ParentProcessId","CreationTicks"\n"2112","800","2000"\n"9000","2112","2001"\n"4472","800","2002"'
+    )
+    check_output = MagicMock(side_effect=[initial_csv, mid_teardown_csv, final_csv, final_csv])
+    monkeypatch.setattr(runtime_helpers.sys, "platform", "win32")
+    monkeypatch.setattr(runtime_helpers, "_WINDOWS_CREATION_TICKS", {})
+    monkeypatch.setattr(
+        runtime_helpers.shutil,
+        "which",
+        MagicMock(return_value=r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
+    )
+    monkeypatch.setattr(runtime_helpers.subprocess, "check_output", check_output)
+    monkeypatch.setattr(runtime_helpers.time, "sleep", MagicMock())
+
+    pids = runtime_helpers.descendants(2112)
+    runtime_helpers.wait_for_descendants_to_exit(pids, parent_pid=2112)
+
+    assert pids == {4472, 6556}
+    assert runtime_helpers.pid_exists(4472) is False
+    assert check_output.call_count == 4
+
+
+def test_windows_wait_for_descendants_to_exit_reports_surviving_descendant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_csv = '"ProcessId","ParentProcessId","CreationTicks"\n"2112","5120","1000"\n"4472","2112","1001"'
+    monkeypatch.setattr(runtime_helpers.sys, "platform", "win32")
+    monkeypatch.setattr(runtime_helpers, "_WINDOWS_CREATION_TICKS", {})
+    monkeypatch.setattr(
+        runtime_helpers.shutil,
+        "which",
+        MagicMock(return_value=r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
+    )
+    monkeypatch.setattr(
+        runtime_helpers.subprocess,
+        "check_output",
+        MagicMock(return_value=snapshot_csv),
+    )
+    monkeypatch.setattr(runtime_helpers.time, "monotonic", MagicMock(side_effect=[10.0, 16.0]))
+    monkeypatch.setattr(runtime_helpers.time, "sleep", MagicMock())
+
+    pids = runtime_helpers.descendants(2112)
+    with pytest.raises(AssertionError, match=r"Granian descendants did not exit: \[4472\]"):
+        runtime_helpers.wait_for_descendants_to_exit(pids, parent_pid=2112)
