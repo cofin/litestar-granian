@@ -1,17 +1,45 @@
-# Litestar Granian
+<div align="center">
 
-Run Litestar applications with Granian while preserving Litestar startup,
-shutdown, logging, and server integrations.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cofin/litestar-granian/main/docs/assets/banner-inline-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/cofin/litestar-granian/main/docs/assets/banner-inline-light.svg">
+  <img alt="Litestar Granian" src="https://raw.githubusercontent.com/cofin/litestar-granian/main/docs/assets/banner-inline-light.svg" width="520">
+</picture>
+
+<p><strong>Granian HTTP and WebSocket server plugin for Litestar applications.</strong></p>
+
+[![PyPI](https://img.shields.io/pypi/v/litestar-granian)](https://pypi.org/project/litestar-granian/)
+[![Python](https://img.shields.io/pypi/pyversions/litestar-granian)](https://pypi.org/project/litestar-granian/)
+[![License](https://img.shields.io/pypi/l/litestar-granian)](https://github.com/cofin/litestar-granian/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-litestar--granian-1d4ed8)](https://cofin.github.io/litestar-granian/)
+
+[Documentation](https://cofin.github.io/litestar-granian/) · [Quickstart](https://cofin.github.io/litestar-granian/getting-started/quickstart/) · [Configuration](https://cofin.github.io/litestar-granian/guides/configuration/) · [Deployment](https://cofin.github.io/litestar-granian/guides/deployment/) · [CLI Reference](https://cofin.github.io/litestar-granian/reference/cli/) · [Plugin API](https://cofin.github.io/litestar-granian/reference/plugin/)
+
+</div>
+
+`litestar-granian` runs [Litestar](https://litestar.dev/) applications on [Granian](https://github.com/emmett-framework/granian)'s Rust HTTP/1, HTTP/2, and WebSocket runtime through the standard `litestar run` CLI. A supervised parent process manages `server_lifespan` hooks, forwards OS signals across the Granian worker group, bridges Litestar's active log formatters, and promotes static asset directories to Granian's native file server.
 
 ## Install
 
-```shell
-python -m pip install litestar-granian
+```bash
+uv add litestar-granian
 ```
 
-## Run your first app
+Or with `pip`:
 
-Save this as `example.py`:
+```bash
+pip install litestar-granian
+```
+
+Install an optional event loop extra when needed (`uvloop`, `rloop`, or `winloop`):
+
+```bash
+uv add "litestar-granian[uvloop]"
+```
+
+## Quickstart
+
+Save as `example.py`:
 
 <!-- quickstart-app:start -->
 ```python
@@ -29,73 +57,31 @@ app = Litestar(route_handlers=[hello], plugins=[GranianPlugin()])
 ```
 <!-- quickstart-app:end -->
 
-Start the server:
+Start the server with `litestar run`:
 
-```shell
+```bash
 litestar --app example:app run
 ```
 
-Open <http://127.0.0.1:8000/> in a browser, or run:
+## Capabilities
 
-```shell
-curl http://127.0.0.1:8000/
-```
+| Area | Overview |
+| --- | --- |
+| **Drop-In `litestar run`** | Replaces Litestar's `run` command with Granian's HTTP/1, HTTP/2, and WebSocket server while keeping `LITESTAR_*` flags and environment variables. |
+| **Process Supervision** | Runs `server_lifespan` context managers once in the parent process and forwards `SIGINT`/`SIGTERM` cleanly across the Granian worker process group. |
+| **Log Formatter Bridge** | Reconstructs Litestar's active standard, JSON, or `structlog` formatters inside Granian workers, or accepts an explicit `--log-config` override. |
+| **Native Static Files** | Serves static asset directories directly from Granian via `--static-path-mount` or automatic `GranianPlugin(static="auto")` discovery. |
+| **Event Loops & Runtimes** | Supports `asyncio`, `uvloop`, `rloop`, and `winloop` across Python 3.11–3.15, including free-threaded `3.14t` and `3.15t` builds. |
 
-You should receive:
+## Documentation
 
-```json
-{"hello":"world"}
-```
+- **[Getting Started & Quickstart](https://cofin.github.io/litestar-granian/getting-started/quickstart/)** — installation, first server run, and `v0.16` migration notes.
+- **[Configuration & Runtime](https://cofin.github.io/litestar-granian/guides/configuration/)** — bindings, workers, runtime threads, HTTP/2, reload, and event loops.
+- **[Logging & Metrics](https://cofin.github.io/litestar-granian/guides/logging-and-metrics/)** — automatic formatter matching, custom log configs, and Prometheus metrics.
+- **[Static Files](https://cofin.github.io/litestar-granian/guides/static-files/)** — native Rust static asset mounts and SPA index rewrites.
+- **[Deployment & TLS](https://cofin.github.io/litestar-granian/guides/deployment/)** — signal handling, container deployments, UNIX domain sockets, TLS, and mTLS.
+- **[API & CLI Reference](https://cofin.github.io/litestar-granian/reference/)** — `GranianPlugin` API, `litestar run` CLI options, and compatibility notes.
 
-Press `Ctrl+C` in the server terminal to stop it.
+## Contributing & License
 
-## Why use this plugin?
-
-- Keep the familiar `litestar run` command while using Granian.
-- Start Litestar server integrations once around all Granian workers.
-- Configure workers, protocols, logging, metrics, and static files from one CLI.
-
-## What the plugin changes
-
-`GranianPlugin()` replaces Litestar's standard `run` command with a
-Granian-backed command. It does not change commands that start another ASGI
-server directly.
-
-Run the complete command reference with:
-
-```shell
-litestar --app example:app run --help
-```
-
-<details>
-<summary>Optional event loops</summary>
-
-The default installation uses Granian's standard loop selection and installs
-no optional event loop. Install and select one integration at a time:
-
-```shell
-python -m pip install "litestar-granian[uvloop]"
-litestar --app example:app run --loop uvloop
-```
-
-On supported platforms, use the matching `rloop` or `winloop` extra and pass
-`--loop rloop` or `--loop winloop`.
-
-</details>
-
-## Next steps
-
-- [Quickstart](docs/getting-started/quickstart.md) — repeat the first run and
-  learn what to check.
-- [Configuration](docs/guides/configuration.md) — choose bindings, workers,
-  protocols, TLS, reload, and event loops.
-- [Logging and metrics](docs/guides/logging-and-metrics.md) — see how Granian
-  automatically matches Litestar's formatter or accepts a complete override.
-- [Deployment](docs/guides/deployment.md) — forward signals and verify clean
-  shutdown.
-- [CLI reference](docs/reference/cli.md) — browse every option and environment
-  variable.
-
-## License
-
-`litestar-granian` is distributed under the [MIT License](LICENSE).
+Contributions are welcome; see the [Contribution Guide](https://cofin.github.io/litestar-granian/contribution-guide/) for local environment setup, testing, and release workflow. Distributed under the [MIT License](https://github.com/cofin/litestar-granian/blob/main/LICENSE).

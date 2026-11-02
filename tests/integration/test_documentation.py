@@ -8,6 +8,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -196,6 +197,30 @@ def test_readme_quickstart_matches_the_canonical_app() -> None:
 
     assert match is not None
     assert match.group("source").strip() == source
+
+
+def test_readme_and_project_metadata_align_with_deployed_docs() -> None:
+    """Verify README banner/links and package metadata target the deployed docs site."""
+    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+    pyproject = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    zensical = tomllib.loads((_ROOT / "zensical.toml").read_text(encoding="utf-8"))
+    project = pyproject["project"]
+    urls = project["urls"]
+    site_url = "https://cofin.github.io/litestar-granian/"
+
+    assert "banner-inline-dark.svg" in readme
+    assert "banner-inline-light.svg" in readme
+    assert f"({site_url})" in readme
+    assert f"({site_url}contribution-guide/)" in readme
+    assert "(docs/" not in readme
+
+    assert project["description"] == zensical["project"]["site_description"]
+    assert urls["Homepage"] == site_url
+    assert urls["Documentation"] == site_url
+    assert urls["Changelog"] == f"{site_url}changelog/"
+    assert "litestar" in project["keywords"]
+    assert "granian" in project["keywords"]
+    assert "litestar-plugin" in project["keywords"]
 
 
 def test_every_displayed_artifact_exists_is_referenced_and_is_exercisable() -> None:

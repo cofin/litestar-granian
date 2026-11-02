@@ -1,3 +1,5 @@
+"""Process and socket helpers for live-server integration tests."""
+
 from __future__ import annotations
 
 import csv
@@ -9,8 +11,18 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+
+_WINDOWS_PROCESS_TABLE_SCRIPT = (
+    "Get-CimInstance Win32_Process | "
+    "Select-Object ProcessId,ParentProcessId,"
+    "@{Name='CreationTicks';Expression={"
+    "if ($null -ne $_.CreationDate) { $_.CreationDate.ToUniversalTime().Ticks } else { '' }"
+    "}} | "
+    "ConvertTo-Csv -NoTypeInformation"
+)
+_WINDOWS_CREATION_TICKS: dict[int, int] = {}
 
 
 def free_port() -> int:
@@ -49,31 +61,22 @@ def windows_executable(name: str, *parts: str) -> str:
 
 def descendants(root_pid: int) -> set[int]:
     if sys.platform == "win32":
-        powershell = windows_executable(
-            "powershell",
-            "System32",
-            "WindowsPowerShell",
-            "v1.0",
-        )
-        script = (
-            "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation"
-        )
-        output = subprocess.check_output([powershell, "-NoProfile", "-Command", script], text=True)
-        rows = csv.DictReader(io.StringIO(output))
-        pairs = [(int(row["ProcessId"]), int(row["ParentProcessId"])) for row in rows]
-    else:
-        ps = shutil.which("ps") or "/bin/ps"
-        output = subprocess.check_output([ps, "-eo", "pid=,ppid="], text=True)
-        pairs = [
-            (int(pid_text), int(parent_text))
-            for line in output.splitlines()
-            for pid_text, parent_text in [line.split()]
-        ]
+        table = _windows_process_table()
+        found = _windows_descendants(table, root_pid)
+        _record_windows_creation_ticks(table, (root_pid, *found))
+        return found
+
+    ps = shutil.which("ps") or "/bin/ps"
+    output = subprocess.check_output([ps, "-eo", "pid=,ppid="], text=True)
+    pairs = [
+        (int(pid_text), int(parent_text)) for line in output.splitlines() for pid_text, parent_text in [line.split()]
+    ]
 
     by_parent: dict[int, set[int]] = {}
     for pid, parent_pid in pairs:
-        by_parent.setdefault(parent_pid, set()).add(pid)
-    found: set[int] = set()
+        if pid != parent_pid:
+            by_parent.setdefault(parent_pid, set()).add(pid)
+    found = set()
     pending = [root_pid]
     while pending:
         parent = pending.pop()
@@ -86,6 +89,8 @@ def descendants(root_pid: int) -> set[int]:
 
 def pid_exists(pid: int) -> bool:
     if sys.platform == "win32":
+        if pid in _WINDOWS_CREATION_TICKS:
+            return _windows_pid_matches(_windows_process_table(), pid)
         tasklist = windows_executable("tasklist", "System32")
         output = subprocess.check_output(
             [tasklist, "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
@@ -102,10 +107,16 @@ def pid_exists(pid: int) -> bool:
 
 
 def wait_for_descendants_to_exit(pids: set[int], *, parent_pid: int | None = None) -> None:
+    if sys.platform == "win32":
+        _wait_for_windows_descendants_to_exit(pids, parent_pid=parent_pid)
+        return
+
+    tracked_pids = set(pids)
+
     def current_pids() -> set[int]:
         if parent_pid is not None and pid_exists(parent_pid):
-            return descendants(parent_pid)
-        return pids
+            tracked_pids.update(descendants(parent_pid))
+        return tracked_pids
 
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -163,3 +174,109 @@ def terminate_process_group(process: subprocess.Popen[str]) -> None:
     else:
         os.killpg(process.pid, signal.SIGKILL)
     process.wait(timeout=5)
+
+
+def _wait_for_windows_descendants_to_exit(pids: set[int], *, parent_pid: int | None = None) -> None:
+    """Wait until all tracked Windows descendants exit, accounting for PID reuse."""
+    tracked_pids = set(pids)
+    deadline = time.monotonic() + 5
+    remaining: list[int] = []
+    while True:
+        table = _windows_process_table()
+        if parent_pid is not None and _windows_pid_matches(table, parent_pid):
+            current_children = _windows_descendants(table, parent_pid)
+            _record_windows_creation_ticks(table, current_children)
+            tracked_pids.update(current_children)
+        remaining = sorted(pid for pid in tracked_pids if _windows_pid_matches(table, pid))
+        if not remaining or time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+    if remaining:
+        message = f"Granian descendants did not exit: {remaining}"
+        raise AssertionError(message)
+
+
+def _windows_process_table() -> dict[int, tuple[int, int | None]]:
+    """Query active Windows processes mapped to ``(parent_pid, creation_ticks)``."""
+    powershell = windows_executable(
+        "powershell",
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+    )
+    output = subprocess.check_output(
+        [powershell, "-NoProfile", "-Command", _WINDOWS_PROCESS_TABLE_SCRIPT],
+        text=True,
+    )
+    return _parse_windows_process_table(output)
+
+
+def _parse_windows_process_table(output: str) -> dict[int, tuple[int, int | None]]:
+    """Parse ``Win32_Process`` CSV rows into ``pid -> (parent_pid, creation_ticks)``."""
+    rows = csv.DictReader(io.StringIO(output))
+    table: dict[int, tuple[int, int | None]] = {}
+    for row in rows:
+        raw_pid = row.get("ProcessId")
+        raw_parent = row.get("ParentProcessId")
+        if not raw_pid or not raw_parent:
+            continue
+        raw_ticks = (row.get("CreationTicks") or "").strip()
+        ticks = int(raw_ticks) if raw_ticks else None
+        table[int(raw_pid)] = (int(raw_parent), ticks)
+    return table
+
+
+def _windows_descendants(table: Mapping[int, tuple[int, int | None]], root_pid: int) -> set[int]:
+    """Return Windows descendants created at or after each parent in the chain."""
+    root_entry = table.get(root_pid)
+    if root_entry is None or root_entry[1] is None:
+        return set()
+    children_by_parent = _windows_valid_children_by_parent(table)
+    found: set[int] = set()
+    pending = [root_pid]
+    while pending:
+        for child in children_by_parent.get(pending.pop(), ()):
+            if child not in found:
+                found.add(child)
+                pending.append(child)
+    return found
+
+
+def _windows_valid_children_by_parent(
+    table: Mapping[int, tuple[int, int | None]],
+) -> dict[int, set[int]]:
+    """Group candidate child PIDs whose creation timestamp is not older than their parent."""
+    by_parent: dict[int, set[int]] = {}
+    for pid, (parent_pid, child_ticks) in table.items():
+        if pid == parent_pid or child_ticks is None:
+            continue
+        parent_entry = table.get(parent_pid)
+        if parent_entry is None or parent_entry[1] is None:
+            continue
+        if child_ticks >= parent_entry[1]:
+            by_parent.setdefault(parent_pid, set()).add(pid)
+    return by_parent
+
+
+def _record_windows_creation_ticks(
+    table: Mapping[int, tuple[int, int | None]],
+    pids: Iterable[int],
+) -> None:
+    """Cache observed creation timestamps so recycled PIDs are not treated as still running."""
+    for pid in pids:
+        entry = table.get(pid)
+        if entry is not None and entry[1] is not None:
+            _WINDOWS_CREATION_TICKS[pid] = entry[1]
+        else:
+            _WINDOWS_CREATION_TICKS.pop(pid, None)
+
+
+def _windows_pid_matches(table: Mapping[int, tuple[int, int | None]], pid: int) -> bool:
+    """Return whether ``pid`` still refers to the originally observed Windows process."""
+    entry = table.get(pid)
+    if entry is None:
+        return False
+    expected_ticks = _WINDOWS_CREATION_TICKS.get(pid)
+    if expected_ticks is None:
+        return True
+    return entry[1] == expected_ticks
